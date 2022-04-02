@@ -1,0 +1,356 @@
+---
+title: "give_walksheds_census"
+author: "Dexter H. Locke, PhD"
+date: "`r format(Sys.time())`"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# 0 load libraries, get oriented
+
+```{r}
+# Load libraries 
+packs <-c(  'tidyverse' # cuz
+          , 'tidylog'   # prints out what was done in dplyr and tidyr; VERBOSE
+          , 'magrittr'  # for all of the the pipes
+          , 'sf'        # for spatial data support
+          # , 'sp'        #  older spatial data support
+          # , 'spdep'     # spatial dependency
+          # , 'sfdep'     # remotes::install_github("josiahparry/sfdep")
+          , 'mapview'   # web maps for zooming and panning around
+          , 'beepr'     # makes noises
+          , 'tictoc'    # times things
+          , 'tigris'    # Census geographic data (via TIGER)
+          # , 'parallel'  # parallel processing, vroom, vroom
+          )
+
+if (length(setdiff(packs, rownames(installed.packages()))) > 0) {
+  install.packages(setdiff(packs, rownames(installed.packages())))
+}
+
+# load the packages all at once
+vapply(packs, library, character.only = TRUE, logical(1),
+       logical.return = TRUE, quietly = TRUE)
+
+# get oriented
+list.files()
+list.files('input_data')
+
+
+# for reproducibility
+set.seed(19870630)
+
+# fixes mapview
+# mapviewOptions(fgb = FALSE)
+mapviewOptions(platform = "leafgl") #should help with large data.
+
+# custom function for "Not In"
+`%nin%` <- Negate(`%in%`)
+
+# erase function with st_buffer(0) to fix polygons with topology problems
+# via @etiennebr
+# https://github.com/r-spatial/sf/issues/1280
+st_erase = function(x, y) {
+  st_difference(
+    x %>% st_buffer(0), 
+    st_union(st_combine(st_geometry(y))) %>% st_buffer(0))
+  }
+
+```
+
+
+# 1 read in the data
+## A Block population (tabular)
+```{r}
+
+tic(); (block_pop_tbl <- read_csv('input_data/nhgis0059_csv/nhgis0059_ds248_2020_block.csv'
+                                 , col_select = c(  GISJOIN
+                                                  , tot_pop = U7C001
+                                                  ))
+        ); toc() # ~15 seconds
+
+```
+
+
+## B block shapefiles per state
+### i unzip state-specific block files
+```{r eval=FALSE, include=FALSE}
+
+
+# # just testing out file.remove() function, never used before..
+# dir.create('input_data/nhgis0060_shape/test_to_delete_april_fools')
+# list.files('input_data/nhgis0060_shape/test_to_delete_april_fools/')
+# file.remove('input_data/nhgis0060_shape/test_to_delete_april_fools')
+
+# # get zip files
+# (zip_path <- 'input_data/nhgis0060_shape')
+# (zip_files<- list.files(zip_path, full.names = TRUE))
+# 
+# # done once, no need to re-do
+# tic(); for(i in zip_files){
+#   print(i)
+#   unzip(i, exdir = zip_path)
+#   file.remove(i)
+# }; toc() # ~75 seconds
+
+```
+
+
+### ii peek at a state, test somethings out
+```{r eval=FALSE, include=FALSE}
+
+# tic(); (RI <- st_read('input_data/nhgis0060_shape/RI_block_2020.shp')); toc()
+
+# slightly faster to select (via SQL) down only the relevant columns
+tic(); (RI <- st_read('input_data/nhgis0060_shape/RI_block_2020.shp', 
+        query = 'SELECT GISJOIN, STATEFP20, ALAND20, AWATER20 FROM RI_block_2020') %>%
+          filter(!st_is_empty(.)) %>%              # drop empty polygons
+          filter(ALAND20 > 0) %>%                  # drop areas without land
+          left_join(block_pop_tbl                  # add in population
+                    , by = 'GISJOIN') %>% 
+          filter(tot_pop > 0)                       # remove areas without people
+        ); toc()
+
+RI %>% slice(1) %>% mutate(area = st_area(.))
+
+RI |> mapview()
+
+# # MUCH LARGER test
+# # slightly faster to select (via SQL) down only the relevant columns
+# tic(); (CA <- st_read('input_data/nhgis0060_shape/CA_block_2020.shp', 
+#         query = 'SELECT GISJOIN, STATEFP20, ALAND20, AWATER20 FROM CA_block_2020') %>%
+#           filter(!st_is_empty(.)) %>%              # drop empty polygons
+#           filter(ALAND20 > 0) %>%                  # drop areas without land
+#           left_join(block_pop_tbl                  # add in population
+#                     , by = 'GISJOIN') %>% 
+#           filter(tot_pop > 0)                       # remove areas without people
+#         ); toc() # success!!
+
+```
+
+
+
+# C downlaod water polygons
+# i TODO figure out why those counties fail (failed_counties)
+
+```{r}
+
+failed_counties <- c(
+  # AK
+    'Prince of Wales-Outer Ketchikan Census Area'
+  , 'Skagway-Yakutat-Angoon Census Area'
+  , 'Skagway-Hoonah-Angoon Census Area'
+  , 'Wrangell-Petersburg Census Area'
+  , 'Wade Hampton Census Area'
+  , 'Valdez-Cordova Census Area'
+  # FL
+  , 'Dade County'
+  # MT
+  , 'Yellowstone National Park'
+  # SD
+  , 'Shannon County'
+  # VA
+  , 'Bedford city'
+  , 'Clifton Forge city'
+  , 'South Boston city'
+  )
+
+```
+
+
+## ii a little prep
+```{r}
+# # test
+# tigris::area_water(state = 'RI', county = 'Bristol County', year = 2020) # 2020, yay!
+
+# this gets all state, state_code, and state_name
+state_code_abb <- tigris::fips_codes %>%              # built into tidycensus (and tigris)
+  distinct(state, state_code, state_name) %>% 
+  filter(state %nin% c('UM', 'VI', 'MP', 'GU', 'AS', 'PR')) # 50 + DC
+
+# year 2020
+yr <- 2020
+```
+
+
+## iii get the polygons
+```{r eval=FALSE, include=FALSE}
+
+# loop trough states and counties
+# tic(); for(i in state_code_abb$state[c(40, 46)]){ # Rhode Island, used for testing
+tic(); for(i in state_code_abb$state){
+  tic()
+  cat('working on:', i)
+  # get a state
+  fips_codes %>%
+    filter(county %nin% failed_counties) %>%
+    filter(state == i)  -> state_i
+  
+  # make a state-specific subdirectory if one doesn't exist
+  ifelse(!dir.exists(paste0(getwd(), '/input_data/water_polygons/', i))
+         ,dir.create(paste0(getwd(), '/input_data/water_polygons/', i)), FALSE)
+  
+  for(j in state_i$county){
+    # query for counties, download, save
+    tic()
+    area_water(state = i, county = j, year = yr) %>%
+      select(!everything()) %>%
+      mutate(state = i, county = j) %>%
+      st_make_valid() %>%
+      st_write(.
+               , paste0(getwd(), '/input_data/water_polygons/', i, '/water_polygons_', yr, '_',
+                        j, '_', str_replace(Sys.Date(), '[[:punct:]]', '-'), '.shp')
+               )
+    toc() # end j loop
+    }
+  }; toc(); beep() # end i loop
+
+
+```
+
+
+# D read in water polygons per state, erase from BLOCKS (jth county in ith state at a time)
+```{r}
+
+
+sf_use_s2(FALSE) # suppresses errors, allows st_erase to run
+ 
+
+(out_dir <- paste0(getwd(), '/input_data/blocks_', yr)) # helps put it all together
+
+tic(); for(i in state_code_abb$state){
+# tic(); for(i in state_code_abb$state[c(40, 46)]){ # Rhode Island, used for testing 46 = Vermont
+  print(i)
+  # create data paths
+  # water polygons
+  water_data_path <- paste0(getwd(), '/input_data/water_polygons/', i)
+  water_files     <- dir(water_data_path, recursive = TRUE, pattern = "*.shp")
+  
+  # make a state-specific subdirectory if one doesn't exist
+  # FIX PATHS
+  ifelse(!dir.exists(paste0(file.path(out_dir), '_no_water/', i))
+         ,dir.create(paste0(file.path(out_dir), '_no_water/', i)), FALSE)
+  
+  # read in water polygons per county per state and stack them all together for the ith state
+  water_state_i <- tibble(filename = water_files) %>%
+    mutate(file_contents = map(filename, ~ st_read(file.path(water_data_path, .)))) %>%
+    unnest(cols = file_contents) %>%
+    st_as_sf() %>%
+    select(state, county, geometry)
+  
+  # extract blocks per state
+  block_data_path <- paste0(getwd(), '/input_data/nhgis0060_shape/')
+  block_files_state_i <- dir(block_data_path, recursive = TRUE, pattern = "*.shp$") %>%
+    tibble() %>% 
+    filter(str_detect(., i)) %>%
+    pull(.)
+
+  blocks_ply_state_i <- st_read(paste0(block_data_path, block_files_state_i)
+      , query = paste0('SELECT GISJOIN, GEOID20, STATEFP20, COUNTYFP20 FROM ',
+      str_remove(block_files_state_i, '.shp'))) |> 
+    rename(
+        state_code = STATEFP20
+      , county_code= COUNTYFP20
+      ) |> 
+    left_join(fips_codes |> select(state_code, county_code, state, county)
+              , by = c('state_code', 'county_code')) |> 
+    st_transform(st_crs(water_state_i))
+  
+  
+  # county receptacle
+  block_ply_state_i_no_water <- rep(list(data.frame(county = NA_character_)),0)
+  
+  for(j in unique(water_state_i$county)){
+    print(j)
+    blocks_ply_state_i_county_j <- blocks_ply_state_i %>% filter(state == i, county == j)
+    water_state_i_county_j <- water_state_i %>% filter(county == j)
+    # in SERIES
+    # erase out water from block groups
+    # note the use of "st_erase_3" instead of "st_erase"
+    # block_ply_state_i_no_water[[j]] <- st_erase(blocks_ply_state_i_county_j, water_state_i_county_j)
+    
+    st_erase(blocks_ply_state_i_county_j, water_state_i_county_j) %>% 
+    st_collection_extract(., "POLYGON") %>%              # cuts out linestrings caused by slivers, if there are any
+    aggregate(by = list(.$GEOID), dplyr::first) %>%      # makes multipart polygons
+    mutate(a_cbg_km2 = as.double(st_area(.) / 1e+6)) %>% # actually the cbg area now
+    filter(!st_is_empty(.)) %>% 
+    st_write(. # save with appending rather than stacking in list like below
+             , paste0(file.path(out_dir), '_no_water/', i, '/', i, '_'
+                      , str_replace(Sys.Date(), '-', '_'), '.shp')
+             , append = TRUE
+             )
+             
+    }
+  
+  # # stack the lists together
+  # block_ply_state_i_no_water %>%
+  #   bind_rows() %>%
+  #   st_collection_extract(., "POLYGON") %>%              # cuts out linestrings caused by slivers, if there are any
+  #   aggregate(by = list(.$GEOID), dplyr::first) %>%      # makes multipart polygons
+  #   mutate(a_cbg_km2 = as.double(st_area(.) / 1e+6)) %>% # actually the cbg area now
+  #   filter(!st_is_empty(.)) %>% 
+  #   st_write(.
+  #            , paste0(file.path(out_dir), '_no_water/', i, '/', i, '_'
+  #                     , str_replace(Sys.Date(), '-', '_'), '.shp')
+  #            )
+  }; toc() # all 51 places at block group level takes ~16 hours
+
+
+```
+
+
+
+## X tabular data
+```{r}
+
+tic(); block_tbl <- read_csv('input_data/nhgis0059_csv/nhgis0059_ds248_2020_block.csv'
+                    , col_select = c(  GISJOIN
+                                     , year      = YEAR
+                                     , state     = STATE
+                                     , state_id  = STATEA
+                                     , county    = COUNTY
+                                     , area_land = AREALAND
+                                     , area_water=AREAWATR
+                                     , U7C001     # Total population
+                                     , U7C002     # Hispanic or Latino
+                                     # NH White alone (not POC). Create a %nhwhite variable
+                                     # that is U7C005/U7C001. This may be prime variable of
+                                     # interest.
+                                     , U7C005
+                                     , U7C006      # NH Black alone
+                                     , U7C007      # NH AIAN alone
+                                     , U7C008      # NH Asian alone
+                                     , U7C009      # NH NHPI alone
+                                     , U7C010      # NH other
+                                     , U7C011      # NH multirace
+                                     )
+                    ); toc()
+
+
+
+```
+
+
+## save out
+
+```{r eval=FALSE, include=FALSE}
+# save.image("saved_sessions/01_give_walkshed_census_20220402.RData") 
+```
+
+## CITE your sources!!!
+
+```{r}
+lapply(packs, citation); rm(packs)
+sessionInfo()
+```
+
+Last Knit on `r format(Sys.time())`
+
+# SANDBOX
