@@ -23,12 +23,12 @@ packs <-c(  'tidyverse' # cuz
           , 'sf'        # for spatial data support
           # , 'sp'        #  older spatial data support
           # , 'spdep'     # spatial dependency
-          # , 'sfdep'     # remotes::install_github("josiahparry/sfdep")
+          , 'sfdep'     # remotes::install_github("josiahparry/sfdep")
           , 'mapview'   # web maps for zooming and panning around
           , 'beepr'     # makes noises
           , 'tictoc'    # times things
           , 'tigris'    # Census geographic data (via TIGER)
-          # , 'parallel'  # parallel processing, vroom, vroom
+          , 'parallel'  # parallel processing, vroom, vroom
           )
 
 if (length(setdiff(packs, rownames(installed.packages()))) > 0) {
@@ -48,8 +48,8 @@ list.files('input_data')
 set.seed(19870630)
 
 # fixes mapview
-# mapviewOptions(fgb = FALSE)
-mapviewOptions(platform = "leafgl") #should help with large data.
+mapviewOptions(fgb = FALSE)
+# mapviewOptions(platform = "leafgl") #should help with large data.
 
 # custom function for "Not In"
 `%nin%` <- Negate(`%in%`)
@@ -63,12 +63,101 @@ st_erase = function(x, y) {
     st_union(st_combine(st_geometry(y))) %>% st_buffer(0))
   }
 
+
+sf_use_s2(FALSE) # suppresses errors, allows st_erase to run
+
+
+
+# what's in memory that are sf - spatial features?
+see_sf <- function(){
+  keep(eapply(.GlobalEnv, class),      # gets the objects in the global environment
+       ~ any(str_detect(., "sf"))) %>% # selects elements with sf in them
+    names(.) %>% as.character(.)       # my simple features
+}
+
+
+# Paralise any simple features analysis.
+# https://www.spatialanalytics.co.nz/post/2017/09/11/a-parallel-function-for-spatial-analysis-in-r/
+# define
+st_par <- function(sf_df, sf_func, n_cores, ...){
+
+  # Create a vector to split the data set up by.
+  split_vector <- rep(1:n_cores, each = nrow(sf_df) / n_cores, length.out = nrow(sf_df))
+
+  # Perform GIS analysis
+  split_results <- split(sf_df, split_vector) %>%
+    mclapply(function(x) sf_func(x, ...), mc.cores = n_cores)
+
+  # Combine results back together. Method of combining depends on the output from the function.
+  if (class(split_results[[1]]) == 'list' ){
+    result <- do.call("c", split_results)
+    names(result) <- NULL
+  } else {
+    result <- do.call("rbind", split_results)
+  }
+
+  # Return result
+  return(result)
+}
+
+# Paralise any simple features analysis.
+# https://www.spatialanalytics.co.nz/post/2018/04/01/fixing-st-par/
+# define
+st_parallel <- function(sf_df, sf_func, n_cores, ...){
+
+  # Create a vector to split the data set up by.
+  split_vector <- rep(1:n_cores, each = nrow(sf_df) / n_cores, length.out = nrow(sf_df))
+
+  # Perform GIS analysis
+  split_results <- split(sf_df, split_vector) %>%
+    parallel::mclapply(function(x) sf_func(x, ...), mc.cores = n_cores)
+  
+  
+  # Define the output_class. If length is greater than two, then grab the second variable.
+  output_class <- class(split_results[[1]])
+  if (length(output_class) == 2){
+    output_class <- output_class[2]
+  }
+  
+  # Combine results back together. Method of combining depends on the output from the function.
+  if (output_class == "matrix"){
+    result <- do.call("rbind", split_results)
+    names(result) <- NULL
+  } else if (output_class == "sfc") {
+    result <- do.call("c", split_results)
+    result <- sf_func(result) # do.call combines the list but there are still n_cores of the geometry which had been split up. Running st_union or st_collect gathers them up into one, as is the expected output of these two functions. 
+  } else if (output_class %in% c('list', 'sgbp') ){
+    result <- do.call("c", split_results)
+    names(result) <- NULL
+  } else if (output_class == "data.frame" ){
+    result <- do.call("rbind", split_results)
+  } else {
+    stop("Unknown class. st_parallel only accepts the following outputs at present: sfc, list, sf, matrix, sgbp.")
+  }
+  
+  # Return result
+  return(result)
+}
 ```
+
+
+## handy stuff
+## spatial objects
+```{r}
+# see_sf() -> sf_in_memory; mget(sf_in_memory) %>% purrr::map(~st_crs(.x)$epsg) %>% unlist() #%>% View()
+see_sf() -> sf_in_memory; mget(sf_in_memory) %>% purrr::map(~st_crs(.x)$input) %>% unlist() #%>% View()
+```
+
+## print size of each object
+```{r}
+for(obj in ls()){message(obj); print(object.size(get(obj)), units='auto'); cat('\n')}; rm(obj)
+```
+
 
 
 # 1 read in the data
 ## A Block population (tabular)
-```{r}
+```{r eval=FALSE, include=FALSE}
 
 tic(); (block_pop_tbl <- read_csv('input_data/nhgis0059_csv/nhgis0059_ds248_2020_block.csv'
                                  , col_select = c(  GISJOIN
@@ -137,8 +226,8 @@ RI |> mapview()
 
 
 
-# C downlaod water polygons
-# i TODO figure out why those counties fail (failed_counties)
+## C downlaod water polygons
+### i TODO figure out why those counties fail (failed_counties)
 
 ```{r}
 
@@ -165,7 +254,7 @@ failed_counties <- c(
 ```
 
 
-## ii a little prep
+### ii a little prep
 ```{r}
 # # test
 # tigris::area_water(state = 'RI', county = 'Bristol County', year = 2020) # 2020, yay!
@@ -180,7 +269,7 @@ yr <- 2020
 ```
 
 
-## iii get the polygons
+### iii get the polygons
 ```{r eval=FALSE, include=FALSE}
 
 # loop trough states and counties
@@ -216,126 +305,826 @@ tic(); for(i in state_code_abb$state){
 ```
 
 
-# D read in water polygons per state, erase from BLOCKS (jth county in ith state at a time)
-```{r}
+## D read in water polygons per state, erase from BLOCKS (jth county in ith state at a time) NOTE IN THE FUTURE COMBINE WITH STEP BELOW
+```{r eval=FALSE, include=FALSE}
+
+# DONE
+
+# 
+# (out_dir <- paste0(getwd(), '/input_data/blocks_', yr)) # helps put it all together
+# 
+# tic(); for(i in state_code_abb$state){
+# # tic(); for(i in state_code_abb$state[c(40, 46)]){ # Rhode Island, used for testing 46 = Vermont
+#   print(i)
+#   # create data paths
+#   # water polygons
+#   water_data_path <- paste0(getwd(), '/input_data/water_polygons/', i)
+#   water_files     <- dir(water_data_path, recursive = TRUE, pattern = "*.shp")
+#   
+#   # make a state-specific subdirectory if one doesn't exist
+#   # FIX PATHS
+#   ifelse(!dir.exists(paste0(file.path(out_dir), '_no_water/', i))
+#          ,dir.create(paste0(file.path(out_dir), '_no_water/', i)), FALSE)
+#   
+#   # read in water polygons per county per state and stack them all together for the ith state
+#   water_state_i <- tibble(filename = water_files) %>%
+#     mutate(file_contents = map(filename, ~ st_read(file.path(water_data_path, .)))) %>%
+#     unnest(cols = file_contents) %>%
+#     st_as_sf() %>%
+#     select(state, county, geometry)
+#   
+#   # extract blocks per state
+#   block_data_path <- paste0(getwd(), '/input_data/nhgis0060_shape/')
+#   block_files_state_i <- dir(block_data_path, recursive = TRUE, pattern = "*.shp$") %>%
+#     tibble() %>% 
+#     filter(str_detect(., i)) %>%
+#     pull(.)
+# 
+#   blocks_ply_state_i <- st_read(paste0(block_data_path, block_files_state_i)
+#       , query = paste0('SELECT GISJOIN, GEOID20, STATEFP20, COUNTYFP20 FROM ',
+#       str_remove(block_files_state_i, '.shp'))) |> 
+#     rename(
+#         state_code = STATEFP20
+#       , county_code= COUNTYFP20
+#       ) |> 
+#     left_join(fips_codes |> select(state_code, county_code, state, county)
+#               , by = c('state_code', 'county_code')) |> 
+#     st_transform(st_crs(water_state_i))
+#   
+#   
+#   # county receptacle
+#   block_ply_state_i_no_water <- rep(list(data.frame(county = NA_character_)),0)
+#   
+#   for(j in unique(water_state_i$county)){
+#     print(j)
+#     blocks_ply_state_i_county_j <- blocks_ply_state_i %>% filter(state == i, county == j)
+#     water_state_i_county_j <- water_state_i %>% filter(county == j)
+#     # in SERIES
+#     # erase out water from block groups
+#     # note the use of "st_erase_3" instead of "st_erase"
+#     # block_ply_state_i_no_water[[j]] <- st_erase(blocks_ply_state_i_county_j, water_state_i_county_j)
+#     
+#     st_erase(blocks_ply_state_i_county_j, water_state_i_county_j) %>% 
+#     st_collection_extract(., "POLYGON") %>%              # cuts out linestrings caused by slivers, if there are any
+#     aggregate(by = list(.$GEOID), dplyr::first) %>%      # makes multipart polygons
+#     mutate(a_cbg_km2 = as.double(st_area(.) / 1e+6)) %>% # actually the cbg area now
+#     filter(!st_is_empty(.)) %>% 
+#     st_write(. # save with appending rather than stacking in list like below
+#              , paste0(file.path(out_dir), '_no_water/', i, '/', i, '_'
+#                       , str_replace(Sys.Date(), '-', '_'), '.shp')
+#              , append = TRUE
+#              )
+#              
+#     }
+#   
+#   # # stack the lists together
+#   # block_ply_state_i_no_water %>%
+#   #   bind_rows() %>%
+#   #   st_collection_extract(., "POLYGON") %>%              # cuts out linestrings caused by slivers, if there are any
+#   #   aggregate(by = list(.$GEOID), dplyr::first) %>%      # makes multipart polygons
+#   #   mutate(a_cbg_km2 = as.double(st_area(.) / 1e+6)) %>% # actually the cbg area now
+#   #   filter(!st_is_empty(.)) %>% 
+#   #   st_write(.
+#   #            , paste0(file.path(out_dir), '_no_water/', i, '/', i, '_'
+#   #                     , str_replace(Sys.Date(), '-', '_'), '.shp')
+#   #            )
+#   }; toc() # all 51 places at block group level takes ~16 hours
+# 
+
+```
 
 
-sf_use_s2(FALSE) # suppresses errors, allows st_erase to run
- 
+## E fix multiparts NOTE IN THE FUTURE COMBINE WITH STEP ABOVE
+
+```{r eval=FALSE, include=FALSE}
 
 (out_dir <- paste0(getwd(), '/input_data/blocks_', yr)) # helps put it all together
+data_path <- paste0(file.path(out_dir), '_no_water')
+(files     <- dir(data_path, recursive = TRUE, pattern = "*.shp")) # get file names
 
-tic(); for(i in state_code_abb$state){
-# tic(); for(i in state_code_abb$state[c(40, 46)]){ # Rhode Island, used for testing 46 = Vermont
+# # 52!?!?
+# # it looks like MN is in there twice. 
+# # the prior step ran over night and there is an MN from the 1st and the 2nd. 
+# # rectify
+# mn1 <- st_read("/Users/dlocke/SESYNC/sesync_greenspace/park_access/park_access_demos/input_data/blocks_2020_no_water/MN/MN_2022_04-01.shp")
+# 
+# mn2 <- st_read("/Users/dlocke/SESYNC/sesync_greenspace/park_access/park_access_demos/input_data/blocks_2020_no_water/MN/MN_2022_04-02.shp")
+# 
+# file.remove("/Users/dlocke/SESYNC/sesync_greenspace/park_access/park_access_demos/input_data/blocks_2020_no_water/MN/MN_2022_04-01.shp")
+# 
+# file.remove("/Users/dlocke/SESYNC/sesync_greenspace/park_access/park_access_demos/input_data/blocks_2020_no_water/MN/MN_2022_04-02.shp")
+# 
+# bind_rows(mn1, mn2) |> 
+#   st_write("/Users/dlocke/SESYNC/sesync_greenspace/park_access/park_access_demos/input_data/blocks_2020_no_water/MN/MN_2022_04-02.shp")
+
+# redo
+(files     <- dir(data_path, recursive = TRUE, pattern = "*.shp")) # get file names
+
+# read in block groups (with water erased) by state, make them single parts, then save out
+tic(); for(i in files){
+# for(i in files[1:3]){ # for testing
+  tic()
   print(i)
-  # create data paths
-  # water polygons
-  water_data_path <- paste0(getwd(), '/input_data/water_polygons/', i)
-  water_files     <- dir(water_data_path, recursive = TRUE, pattern = "*.shp")
   
   # make a state-specific subdirectory if one doesn't exist
-  # FIX PATHS
-  ifelse(!dir.exists(paste0(file.path(out_dir), '_no_water/', i))
-         ,dir.create(paste0(file.path(out_dir), '_no_water/', i)), FALSE)
+  ifelse(!dir.exists(paste0(data_path, '_single_part/', str_sub(i, 1, 2)))
+         ,dir.create(paste0(data_path, '_single_part/', str_sub(i, 1, 2))), FALSE)
   
-  # read in water polygons per county per state and stack them all together for the ith state
-  water_state_i <- tibble(filename = water_files) %>%
-    mutate(file_contents = map(filename, ~ st_read(file.path(water_data_path, .)))) %>%
-    unnest(cols = file_contents) %>%
-    st_as_sf() %>%
-    select(state, county, geometry)
-  
-  # extract blocks per state
-  block_data_path <- paste0(getwd(), '/input_data/nhgis0060_shape/')
-  block_files_state_i <- dir(block_data_path, recursive = TRUE, pattern = "*.shp$") %>%
-    tibble() %>% 
-    filter(str_detect(., i)) %>%
-    pull(.)
+  # read in the blocks without water for the ith state
+  st_read(paste0(data_path, '/', i)) %>% # sample_frac(.1) %>% # just used for testing
+    tidylog::select(GISJOIN, GEOID20, st = state
+                    , stcode = stat_cd
+                    , cty_code = cnty_cd
+                    , county
+                    , a_blkkm2 = a_cbg_2) %>% # cosmetic / reordering (names for ESRI)
+    st_cast('POLYGON') %>% 
+    rownames_to_column(var = 'mult_id') %>%
+    mutate(  a_snglkm2   = as.double(st_area(.) / 1e+6) # get singlepart area
+           , a_mult_prp   = (a_snglkm2 / a_blkkm2) # as proportion
+           ) %>%
+    # drop no-area slivers, if any
+    filter(!is.na(a_mult_prp)) %>%
+    st_write(paste0(data_path, '_single_part/', str_sub(i, 1, 2), '/', str_sub(i, 1, 2),
+                    '_block_ply_state_no_water_singlepart.shp'))
+  toc()
+  }; toc() # ~35 mins
 
-  blocks_ply_state_i <- st_read(paste0(block_data_path, block_files_state_i)
-      , query = paste0('SELECT GISJOIN, GEOID20, STATEFP20, COUNTYFP20 FROM ',
-      str_remove(block_files_state_i, '.shp'))) |> 
-    rename(
-        state_code = STATEFP20
-      , county_code= COUNTYFP20
-      ) |> 
-    left_join(fips_codes |> select(state_code, county_code, state, county)
-              , by = c('state_code', 'county_code')) |> 
-    st_transform(st_crs(water_state_i))
+```
+
+
+### i (and asses) 
+```{r eval=FALSE, include=FALSE}
+# how is the proportion behaving?
+cbg_ply_no_water_singlepart %>% ggplot(aes(area_multi_prop)) + 
+  geom_density() +
+  # geom_histogram(binwidth = .01) +
+  NULL
+# any values below 0 or above 100? (just minor rounding error, looks good)
+cbg_ply_no_water_singlepart$area_multi_prop %>% summary()
+# do the pieces add back up? Yes, yes they do
+(cbg_ply_no_water_singlepart %>%
+    st_drop_geometry() %>%
+    group_by(GEOID) %>%
+    summarise(sum_prop = sum(area_multi_prop)) %>% 
+    arrange(desc(sum_prop)) -> sum_prop_check)
+sum_prop_check %>% tail()
+sum_prop_check %>% summary()
+```
+
+
+## F combine all blocks
+```{r eval=FALSE, include=FALSE}
+
+# (combined_layer <- '/Users/dlocke/SESYNC/sesync_greenspace/park_access/park_access_demos/input_data/combined_blocks_2020_no_water_single_part/combined_blocks_2020_no_water_single_part.gpkg')
+# 
+# (data_path <- '/Users/dlocke/SESYNC/sesync_greenspace/park_access/park_access_demos/input_data/blocks_2020_no_water_single_part')
+# 
+# (files <- dir(data_path, recursive = TRUE, pattern = '*.shp')) # get file names
+# 
+# # tic(); (tibble(filename = files[c(40, 47)]) %>% # VT and RI for testing
+# tic(); (tibble(filename = files) %>% 
+#           mutate(file_contents = map(filename, ~st_read(file.path(data_path, .))),
+#                  state = str_sub(filename, start =  1, end = 2)) |> 
+#           select(state, file_contents) |> 
+#           unnest(file_contents) |> 
+#           st_write(dsn = combined_layer, driver = 'GPKG')
+#         ); toc() # ~3:45
+
+```
+
+
+
+## G walksheds
+```{r}
+
+tic(); (ws <- st_read('input_data/Walk Sheds-selected/10MWS Parks within Urban (CONUS)- TPL (ParkServe) - 2020 - crs102039.shp', as_tibble = TRUE) |> 
+  rowid_to_column(var = 'sesync_id') |> 
+  mutate(sesync_id = sesync_id -1)); toc() # ID must start at zero to match FID
+
+st_crs(ws)
+
+# what's a unique ID here?
+dim(ws)
+ws |> st_drop_geometry() |> distinct(Name) |> dim()
+ws |> st_drop_geometry() |> distinct(Name, ParkID) |> dim()
+ws |> st_drop_geometry() |> distinct(OBJECTID, Name, ParkID) |> dim()
+ws |> st_drop_geometry() |> distinct(sesync_id) |> dim()
+
+all.equal(dim(ws)[1], dim(ws |> st_drop_geometry() |> distinct(sesync_id))[1])
+
+# tic(); ws %>%
+#   select(!everything()) %>%
+#   mutate(area = as.numeric(st_area(.))) -> w_area; toc()
+# 
+# w_area |> 
+#   filter(area > 1)
+# 
+# 
+# w_area |> 
+#   st_drop_geometry() |> 
+#   arrange(area) |> 
+#   View()
+# 
+# w_area |> 
+#   st_drop_geometry() |> 
+#   ggplot(aes(area)) +
+#   geom_density() 
+
+```
+
+
+## H US Counties and their neighbors - DEFUNCT
+```{r eval=FALSE, include=FALSE}
+
+# # download
+# cty <- tigris::counties(state = state_code_abb$state, cb = FALSE, year = yr) |> 
+#   tidylog::select(STATEFP : NAMELSAD) |> 
+#   st_write(paste0(getwd(), '/input_data/counties_2020/us_counties_2020.shp'))
+
+# read in
+(
+  cty <- st_read(paste0(getwd(), '/input_data/counties_2020/us_counties_2020.shp')) |>
+    rename(state_code = STATEFP, county_code = COUNTYFP) |>
+    left_join(fips_codes |>
+                select(state_code, county_code, state, state_name)
+              , by = c('state_code', 'county_code')) |>
+    st_transform(crs = st_crs(ws)) |>
+    select(stcode = state_code, state_name, st = state, cty_code = county_code, county = NAMELSAD) |> # cosmetic
+    arrange(st, county) # cosmetic
+  )
+
+cty |> glimpse()
+cty |> slice(2000:2010)
+cty |> slice(3000:3010)
+
+# # get county neighbors
+# tic(); (cty_neighs <- cty |> # slice(300:400) |>  #mapview() # for testing
+#   rowid_to_column(var = 'nb_join') |>  # bc spdep::poly2nb in sfweight::st_neighbors uses row order
+#   mutate(nb = st_contiguity(geometry, queen = TRUE), # first order neighbors
+#          nb2 = st_nb_lag_cumul(nb, 2)                # second order neighbors (overkill?)
+#          ) |>           
+#   st_drop_geometry() |> 
+#   select(-nb) |> 
+#   unnest(nb2) |> 
+#   rename(neighbors_nb_join = nb2)); toc() # ~40 seconds
+# 
+# # add neighbors id's
+# (cty_neighs |> 
+#   left_join(cty_neighs |> 
+#               select(  nb_join # are all of these really needed?
+#                      , neigh_stcode = stcode 
+#                      , neigh_state_name = state_name
+#                      , neigh_st = st
+#                      , neigh_cty_code = cty_code
+#                      , neigh_county = county
+#                      ),
+#             by = c('neighbors_nb_join' = 'nb_join')) |> 
+#     distinct(nb_join, neighbors_nb_join, .keep_all = TRUE) |> 
+#     arrange(st, cty_code, neigh_st, neigh_cty_code) ->  cty_neighs_tbl)
+#   
+# # save out
+# cty_neighs_tbl |> 
+#   write_csv(paste0('input_data/cty_neighs_tbl_', Sys.Date(), '.csv'))
+
+# read in
+(cty_neighs_tbl <- read_csv('input_data/cty_neighs_tbl_2022-04-21.csv'))
+
+cty_neighs_tbl |> glimpse()
+
+```
+
+
+# 2 combine walksheds with Census data
+## A assign walkshes to state and counties (to speed up later intersections)
+```{r}
+
+# # single core
+# tic(); test <- st_intersection(ws |> tidylog::select(OBJECTID, ParkID, Name), cty); toc()
+
+# # multi-core intersection of walksheds and counties
+# detectCores() # 16, yeah!
+# ncore <- 10    # 
+# tic(); st_par(
+#   ws |> tidylog::select(sesync_id, ParkID, Name),
+#   st_intersection, 
+#   ncore,
+#   y = cty |> tidylog::select(stcode, cty_code, st, state_name)
+#   ) |> 
+#   rownames_to_column(var = 'multi_part_id') -> ws_cty_int; toc() # < 1 min!
+# 
+# # # visual double check
+# # ws_cty_int |> filter(state_name == 'Rhode Island') |> mapview(zcol = 'cty_code')
+# 
+# # extract the walkshed state-county keys
+# (
+#   ws_cty_int_lookup <- ws_cty_int |>
+#     st_drop_geometry() |>
+#     distinct(sesync_id, st, stcode, cty_code) |> # you can rename within distinct()!
+#     arrange(sesync_id) # costmetic
+#   )
+# 
+# # # break up sesync_ids into
+# # (
+# #   batch_ids <- ws_cty_int_lookup %>%
+# #     distinct(sesync_id) %>%
+# #     mutate(batch = santoku::chop(sesync_id
+# #                                  , breaks = seq(1, nrow(.), 850)   # chunks of size 100
+# #                                  , santoku::lbl_seq(start = '1')))
+# #   )
+# 
+# # double checks
+# batch_ids |> janitor::tabyl(batch) |> tibble()
+# batch_ids |> janitor::tabyl(batch) |> tibble() |> tail()
+# 
+# # join in the batch ids (we do this as a few steps because we dont want to break up sesync_ids)
+# (ws_cty_int_lookup <- ws_cty_int_lookup |> left_join(batch_ids, by = 'sesync_id'))
+# 
+# ws_cty_int_lookup |> janitor::tabyl(batch) # 172 batches
+# 
+# ws_cty_int_lookup |> 
+#   write_csv(paste0('input_data/ws_cty_int_lookup_batch_size_850_', Sys.Date(), '.csv'))
+
+(ws_cty_int_lookup <- read_csv('input_data/ws_cty_int_lookup_batch_size_850_2022-04-27.csv'))
+
+
+# how many and which walksheds cross boundaries?
+# did we even need to do this, or could we have worked on a county by county basis?
+ws_cty_int_lookup |>
+  group_by(sesync_id) |> 
+  count() |> 
+  filter(n > 1) |> # ~8000 x-boundary walksheds! def needed
+  ungroup() |> 
+  arrange(desc(n)) |> # and *many* 3 and 4 county-crossing walksheds!
+  View()
+
+# red herring? not the 'right' solution?
+# # grab distinct state-county combinations, to iterate through when looping
+# (
+#   ws_cty_int_lookup |> 
+#     distinct(sesync_id, stcode, cty_code) |> 
+#     arrange(stcode, cty_code) |> 
+#     rownames_to_column(var = 'iterator') -> ws_cty_int_iterator
+#   )
+
+
+```
+
+
+## B loop through, intersect ws with blocks
+### i test reading in subsets of data via queries
+```{r eval=FALSE, include=FALSE}
+# # big and slow! (are you sure you want to do this?)
+# test <- st_read('/Users/dlocke/SESYNC/sesync_greenspace/park_access/park_access_demos/input_data/combined_blocks_2020_no_water_single_part/combined_blocks_2020_no_water_single_part.gpkg')
+# 
+# test |> st_drop_geometry() |> janitor::tabyl(state)
+# test |> slice(1:100) |>  mapview()
+
+# # single block group test
+# (combined_layer <- '/Users/dlocke/SESYNC/sesync_greenspace/park_access/park_access_demos/input_data/combined_blocks_2020_no_water_single_part/combined_blocks_2020_no_water_single_part.gpkg')
+# 
+# tic(); test_1_bg <- st_read(combined_layer,
+#                 query = 'SELECT * FROM "combined_blocks_2020_no_water_single_part" WHERE GISJOIN = "G02001300001001002"'); toc()
+# 
+# # state test
+# tic(); test_1_state <- st_read('/Users/dlocke/SESYNC/sesync_greenspace/park_access/park_access_demos/input_data/combined_blocks_2020_no_water_single_part/combined_blocks_2020_no_water_single_part.gpkg',
+#                 query = paste0('SELECT * FROM "combined_blocks_2020_no_water_single_part" WHERE ', 'state = "RI"')); toc()
+# 
+# # state test with paste0
+# query_start <- 'SELECT * FROM "combined_blocks_2020_no_water_single_part" WHERE '
+# 
+# tic(); test <- st_read(
+#   combined_layer
+#   , query = paste0(query_start, 'state = "RI"')); toc()
+# 
+# tic(); test2 <- st_read(
+#   combined_layer
+#   , query = paste0(query_start, 'state = "RI" OR state = "VT"')); toc()
+# 
+# tic(); test2 <- st_read(
+#   combined_layer
+#   , query = paste0(query_start, 'state = "RI" OR state = "VT"')); toc()
+# 
+# tic(); test_par <- st_par(
+#       combined_layer # selected blocks
+#     , st_read, ncore
+#     , query = paste0(query_start, 'state = "RI" OR state = "VT"')
+#     ); toc()
+#
+```
+
+
+### ii testing out best mix of n of chunks and chunk size
+```{r eval=FALSE, include=FALSE}
+
+# SHOULD HAVE USED DISTINCT() WHILE MAKING "i_query"
+
+# # reset
+# ws_cty_int_lookup <- ws_cty_int_lookup |> select(-batch)
+# 
+# # break up sesync_ids into 
+# (
+#   batch_ids <- ws_cty_int_lookup %>% 
+#     distinct(sesync_id) %>% 
+#     mutate(batch = santoku::chop(sesync_id
+#                                  , breaks = seq(1, nrow(.), 970)   # chunks of size 100
+#                                  , santoku::lbl_seq(start = '1')))
+#   )
+# 
+# # double checks
+# batch_ids |> janitor::tabyl(batch) |> tibble()
+# batch_ids |> janitor::tabyl(batch) |> tibble() |> tail()
+# 
+# # join in the batch ids (we do this as a few steps because we dont want to break up sesync_ids)
+# (ws_cty_int_lookup <- ws_cty_int_lookup |> left_join(batch_ids, by = 'sesync_id'))
+# 
+# 
+# 
+# (combined_layer <- '/Users/dlocke/SESYNC/sesync_greenspace/park_access/park_access_demos/input_data/combined_blocks_2020_no_water_single_part/combined_blocks_2020_no_water_single_part.gpkg')
+# 
+# # make a string for querying down the combined blocks geopackage
+# query_start <- 'SELECT * FROM "combined_blocks_2020_no_water_single_part" WHERE '
+# # query_start <- 'SELECT mult_id, GISJOIN, st, stcode, cty_code, a_blkkm2, a_snglkm2 FROM "combined_blocks_2020_no_water_single_part" WHERE '
+# 
+# i <- 2
+# 
+# # generate list of walkshed ids (sesync_ids)
+#   ws_cty_int_lookup |> 
+#     filter(batch == i) |> 
+#     pull(sesync_id) -> i_ws_sesync_ids
+# 
+#   # generate query to filter on import the relevant blocks
+#   ws_cty_int_lookup |> 
+#     # filter(sesync_id == i) |> # legacy of iterating on sesync_id
+#     filter(batch == i) |>
+#     mutate(query = paste0('(stcode = "', stcode, '" AND cty_code = "', cty_code, '") OR '
+#                           , collapse = '' # not sure why this is needed, but makes it work as intended!
+#                           ),
+#            query =  ifelse(str_sub(query, nchar(query) - 4, nchar(query)) == ") OR ", # do you end in ") OR "?
+#                            str_sub(query, 1, nchar(query) - 4),                       # then trim off last 4 chars
+#                            i_query)                                                   # otherwise chill, you good
+#            ) |> 
+#     slice(1) |> # each row repeats when multiple counties.. just take the first row 
+#     pull(query) -> i_query
+#   
+#   # read in only the polygons of ith state-county combo
+#   tic()
+#   i_layer <- st_read(
+#       combined_layer
+#     , query = paste0(query_start, i_query)
+#     , as_tibble = TRUE) |>
+#     st_transform(crs = st_crs(ws))
+#   cat('read/query duration: ')
+#   toc()
+#   beepr::beep()
+#   
+#   tic() # start timing the intersection (the workhorse)
+#   st_intersection(  i_layer                                 # select blocks
+#                   , ws |>                                   # ith ws polygon
+#                     select(sesync_id) |>                    # drop everything but sesync_id
+#                     # filter(sesync_id == i)                # legacy of iterating on sesync_id
+#                     filter(sesync_id %in% i_ws_sesync_ids)
+#                   ) %>%
+#     mutate(int_area_km2 = as.double(st_area(.) / 1e+6)) %>% # get intersecting area
+#     st_drop_geometry() %>%                                  # drop weight
+#     group_by(GISJOIN, sesync_id) %>%                        # block and walkshed ids
+#     mutate(  sum_land_area_km2 = max(a_blkkm2)
+#            , prop_in = int_area_km2 / sum_land_area_km2) |>
+#     select(sesync_id, GISJOIN, prop_in) |>                  # use col these names on import!
+#     write_csv(  file = paste0(getwd(), '/input_data/walkshed_block_intersections/walkshed_block_intersections.csv')
+#               , append = TRUE
+#               , progress = TRUE)
+#   cat('intersect duration: ')
+#   toc()   # clock out of the intersection
+# beepr::beep()
+
+(
+  time_trials <- tribble(
+    ~batch_size, ~n_batches, ~query_durration, ~intersection_duration, 
+    1,           144657,     108.932,          0.412,
+    20,            7234,     156.074,          3.148,
+    40,            3618,     181.057,          3.367,
+    100,           1448,     292.56,           7.354,
+    200,            725,     422.878,          19.407,
+    400,            363,     670.219,          23.27,
+    500,            291,     748.773,          26.756,
+    600,            243,     848.645,          27.583,
+    700,            208,     976.072,          33.021,
+    850,            172,     1106.58,          44.848,
+    899,            162,     1155.139,         40.656,
+    900,            162,     1191.613,         45.135
+    # 1000,           146,
+    ) |> 
+  mutate(total_duration = query_durration + intersection_duration,
+         expected_total = ((total_duration  * n_batches) / 60) / 60)
+  )
+
+time_trials |> 
+  # filter(batch_size > 400) |> 
+  ggplot(aes(expected_total, batch_size)) +
+  xlab('expected time in hours') + 
+  geom_line() + 
+  geom_point()
+
+```
+
+
+## C loop and intersect - SLOW
+```{r eval=FALSE, include=FALSE}
+# # polygons fractions by state
+# ws_cty_int |> st_drop_geometry() |>  group_by(st) |> count(sort = TRUE)
+
+
+(combined_layer <- '/Users/dlocke/SESYNC/sesync_greenspace/park_access/park_access_demos/input_data/combined_blocks_2020_no_water_single_part/combined_blocks_2020_no_water_single_part.gpkg')
+
+# make a string for querying down the combined blocks geopackage
+query_start <- 'SELECT * FROM "combined_blocks_2020_no_water_single_part" WHERE '
+# query_start <- 'SELECT mult_id, GISJOIN, st, stcode, cty_code, a_blkkm2, a_snglkm2 FROM "combined_blocks_2020_no_water_single_part" WHERE ' # didn't work not sure why..
+
+
+# # # tic(); for(i in ws_cty_int_iterator$iterator[1]){ # never tried
+# # #   (i <- ws_cty_int_iterator$iterator[1])
+# # # tic(); for(i in unique(ws_cty_int_lookup$sesync_id[1:2])){
+# # 
+# # # tic(); for(i in unique(ws_cty_int_lookup$sesync_id)){
+# 
+# # tic(); for(i in unique(ws_cty_int_lookup$batch)){ # loop through batches! got suck on batch 81 due to excel length limit, running in reverse
+# 
+# # tic(); for(i in rev(unique(ws_cty_int_lookup$batch))){ # loop through batches backwards!
+# # tic(); for(i in rev(unique(ws_cty_int_lookup$batch))[24:75]){ # loop through batches backwards!
+# # tic(); for(i in unique(ws_cty_int_lookup$batch)[1:3]){ # loop through batches!
+# 
+# # 172 to 87 via rev(unique(ws_cty_int_lookup$batch))[1:86] on jobs
+# # tic(); for(i in unique(ws_cty_int_lookup$batch)[1:86]){ # loop through batches FORWARDS! 
+
+
+tic(); for(i in unique(ws_cty_int_lookup$batch)[1:43]){
+  tic() # iteration clock in
+  # cat('working on sesync_id:', i, '\n')
+  cat('\n working on batch:', i, '\n')
   
+  # generate list of walkshed ids (sesync_ids)
+  ws_cty_int_lookup |> 
+    filter(batch == i) |> 
+    pull(sesync_id) -> i_ws_sesync_ids
+
+  # generate query to filter on import the relevant blocks
+  ws_cty_int_lookup |> 
+    # filter(sesync_id == i) |> # legacy of iterating on sesync_id
+    filter(batch == i) |>
+    distinct(stcode, cty_code) |> # MAJOR TIME SAVER!!!
+    mutate(query = paste0('(stcode = "', stcode, '" AND cty_code = "', cty_code, '") OR '
+                          , collapse = '' # not sure why this is needed, but makes it work as intended!
+                          ),
+           query =  ifelse(str_sub(query, nchar(query) - 4, nchar(query)) == ") OR ", # do you end in ") OR "?
+                           str_sub(query, 1, nchar(query) - 4),                       # then trim off last 4 chars
+                           i_query)                                                   # otherwise chill, you good
+           ) |> 
+    slice(1) |> # each row repeats when multiple counties.. just take the first row 
+    pull(query) -> i_query
   
-  # county receptacle
-  block_ply_state_i_no_water <- rep(list(data.frame(county = NA_character_)),0)
+  # read in only the polygons of ith state-county combo
+  tic()
+  i_layer <- st_read(
+      combined_layer
+    , query = paste0(query_start, i_query)
+    , as_tibble = TRUE) |>
+    st_transform(crs = st_crs(ws)) |> 
+    st_make_valid() # darn census geogs with slivers etc..
+  cat('read/query duration: ')
+  toc(); beepr::beep()
   
-  for(j in unique(water_state_i$county)){
-    print(j)
-    blocks_ply_state_i_county_j <- blocks_ply_state_i %>% filter(state == i, county == j)
-    water_state_i_county_j <- water_state_i %>% filter(county == j)
-    # in SERIES
-    # erase out water from block groups
-    # note the use of "st_erase_3" instead of "st_erase"
-    # block_ply_state_i_no_water[[j]] <- st_erase(blocks_ply_state_i_county_j, water_state_i_county_j)
-    
-    st_erase(blocks_ply_state_i_county_j, water_state_i_county_j) %>% 
-    st_collection_extract(., "POLYGON") %>%              # cuts out linestrings caused by slivers, if there are any
-    aggregate(by = list(.$GEOID), dplyr::first) %>%      # makes multipart polygons
-    mutate(a_cbg_km2 = as.double(st_area(.) / 1e+6)) %>% # actually the cbg area now
-    filter(!st_is_empty(.)) %>% 
-    st_write(. # save with appending rather than stacking in list like below
-             , paste0(file.path(out_dir), '_no_water/', i, '/', i, '_'
-                      , str_replace(Sys.Date(), '-', '_'), '.shp')
-             , append = TRUE
-             )
-             
-    }
+  tic() # start timing the intersection (the workhorse)
+  st_intersection(  i_layer                                 # selected blocks
+                  , ws |>                                   # ith ws polygon
+                    select(sesync_id) |>                    # drop everything but sesync_id
+                    # filter(sesync_id == i)                # legacy of iterating on sesync_id
+                    filter(sesync_id %in% i_ws_sesync_ids)  # select ws in the ith batch
+                  ) %>%
+    mutate(int_area_km2 = as.double(st_area(.) / 1e+6)) %>% # get intersecting area
+    filter(int_area_km2 > 1e-6) %>%                         # intersection has to be greater than 1 m^2
+    st_drop_geometry() %>%                                  # drop weight
+    group_by(GISJOIN, sesync_id) %>%                        # block and walkshed ids
+    mutate(  sum_land_area_km2 = max(a_blkkm2)
+           , prop_in = int_area_km2 / sum_land_area_km2) |>
+    select(sesync_id, GISJOIN, prop_in) |>                  # use col these names on import!
+    write_csv(  file = paste0(getwd(),
+    #'/input_data/walkshed_block_intersections/walkshed_block_intersections.csv'
+     '/input_data/walkshed_block_intersections/walkshed_block_intersections_batch_1_1_to_43.csv'
+    )
+              , append = TRUE
+              , progress = TRUE)
+  cat('intersect duration: ')
+  toc()   # clock out of the intersection
   
-  # # stack the lists together
-  # block_ply_state_i_no_water %>%
-  #   bind_rows() %>%
-  #   st_collection_extract(., "POLYGON") %>%              # cuts out linestrings caused by slivers, if there are any
-  #   aggregate(by = list(.$GEOID), dplyr::first) %>%      # makes multipart polygons
-  #   mutate(a_cbg_km2 = as.double(st_area(.) / 1e+6)) %>% # actually the cbg area now
-  #   filter(!st_is_empty(.)) %>% 
-  #   st_write(.
-  #            , paste0(file.path(out_dir), '_no_water/', i, '/', i, '_'
-  #                     , str_replace(Sys.Date(), '-', '_'), '.shp')
-  #            )
-  }; toc() # all 51 places at block group level takes ~16 hours
+  cat('iteration duration: ')
+  toc()    # clock out of the i-th iteration
+  };       # end loop and clock out
+
+print('loop duration: '); toc()
+
 
 
 ```
 
 
 
-## X tabular data
+## D build intersection table from meta-batch pieces
 ```{r}
 
-tic(); block_tbl <- read_csv('input_data/nhgis0059_csv/nhgis0059_ds248_2020_block.csv'
+# get file names
+files     <- dir(  'input_data/walkshed_block_intersections'
+                 , recursive = TRUE, pattern = "*.csv$", full.names = TRUE)
+
+removals <- c('input_data/walkshed_block_intersections/walkshed_block_intersections_',
+              '_1_to_43.csv', '_44_to_86.csv', '_87_to_130.csv', '_131_to_172.csv')
+
+
+tic(); (walkshed_block_int_tbl <- tibble(filename = files) %>%
+  mutate(
+    file_contents = map(files, 
+                        ~read_csv(.
+                                  , progress = TRUE
+                                  , col_names = c('sesync_id', 'GISJOIN', 'prop_in')
+                                  ))) |> 
+  unnest(cols = file_contents) |> 
+  # needed?
+  # mutate(meta_batch = as.factor(str_remove_all(filename, paste(removals, collapse = '|')))) |> 
+  select(-filename)); toc()
+
+# YIKES - nevermind, all good!
+walkshed_block_int_tbl |> summary(prop_in)
+walkshed_block_int_tbl |> 
+  ggplot(aes(prop_in)) +
+  geom_density()
+
+(problem_ints <- walkshed_block_int_tbl |> filter(prop_in > 1) |> arrange(desc(prop_in)))
+
+problem_ints |> head(20) |> View()
+
+## Troubleshooting (resolved) below
+# (problem_ints |> slice(1:20) |> pull(GISJOIN) -> test_GISJOIN)
+# 
+# 
+# (combined_layer <- '/Users/dlocke/SESYNC/sesync_greenspace/park_access/park_access_demos/input_data/combined_blocks_2020_no_water_single_part/combined_blocks_2020_no_water_single_part.gpkg')
+# 
+# # make a string for querying down the combined blocks geopackage
+# query_start <- 'SELECT * FROM "combined_blocks_2020_no_water_single_part" WHERE '
+# 
+# 
+# tic()
+# test_layer <- st_read(
+#       combined_layer
+#       , query = 'SELECT * FROM \"combined_blocks_2020_no_water_single_part\" WHERE GISJOIN = \"G06003702060102000\"'
+#           # , query = 'SELECT * FROM \"combined_blocks_2020_no_water_single_part\" WHERE GISJOIN IN (\"G06003702060102000\", \"G06003702060102000\", \"G06003702060102000\", \"G53006300106012014\", \"G53006300106012014\", \"G37001709504014045\", \"G13008900224041000\", \"G36010301355001016\", \"G36010301355001016\", \"G12007100803003005\", \"G12007100803003005\", \"G25001308122021000\", \"G22005700214002023\", \"G25001308111023036\", \"G48036100208002026\", \"G25001308111023036\", \"G15000300037011002\", \"G15000300037011002\", \"G15000300037011002\", \"G15000300037011002\")'
+#     # , query = 'SELECT * FROM \"combined_blocks_2020_no_water_single_part\" WHERE GISJOIN IN (\"G25001308111023036\", \"G06003702060102000\")'
+#     # , query = 'SELECT * FROM \"combined_blocks_2020_no_water_single_part\" WHERE GISJOIN =  \"G25001308111023036\"'
+#     , as_tibble = TRUE) |>
+#     st_transform(crs = st_crs(ws))
+#   cat('read/query duration: ')
+#   toc(); beepr::beep()
+# 
+#   
+# 
+# ws |> filter(sesync_id == 638) |> mapview() + mapview(test_layer)
+# 
+
+```
+
+
+# 3 Join Census to blocks
+## A read tabular data
+```{r}
+
+tic(); (block_tbl <- read_csv('input_data/nhgis0059_csv/nhgis0059_ds248_2020_block.csv'
                     , col_select = c(  GISJOIN
                                      , year      = YEAR
                                      , state     = STATE
                                      , state_id  = STATEA
                                      , county    = COUNTY
                                      , area_land = AREALAND
-                                     , area_water=AREAWATR
-                                     , U7C001     # Total population
-                                     , U7C002     # Hispanic or Latino
+                                     , area_water= AREAWATR
+                                     , tot_pop   = U7C001     # Total population
+                                     , Hisp      = U7C002     # Hispanic or Latino
                                      # NH White alone (not POC). Create a %nhwhite variable
                                      # that is U7C005/U7C001. This may be prime variable of
                                      # interest.
-                                     , U7C005
-                                     , U7C006      # NH Black alone
-                                     , U7C007      # NH AIAN alone
-                                     , U7C008      # NH Asian alone
-                                     , U7C009      # NH NHPI alone
-                                     , U7C010      # NH other
-                                     , U7C011      # NH multirace
+                                     , NH_White_alone = U7C005
+                                     , NH_Black_alone = U7C006      
+                                     , NH_AIAN_alone  = U7C007      
+                                     , NH_Asian_alone = U7C008      
+                                     , NH_NHPI_alone  = U7C009      
+                                     , NH_other       = U7C010      
+                                     , NH_multirace   = U7C011      
                                      )
-                    ); toc()
+                    )); toc()
 
 
 
 ```
+
+
+## B join
+```{r}
+
+walkshed_block_int_tbl |> left_join(block_tbl, by = 'GISJOIN')
+walkshed_block_int_tbl |> anti_join(block_tbl, by = 'GISJOIN')
+
+block_tbl |> 
+  left_join(walkshed_block_int_tbl, by = 'GISJOIN')
+
+# make walkshed-level estimates
+block_tbl |> 
+  right_join(walkshed_block_int_tbl, by = 'GISJOIN') |> # filter(is.na(sesync_id))
+  mutate(  w_tot_pop        = tot_pop       *prop_in
+         , w_Hisp           = Hisp          *prop_in
+         , w_NH_White_alone = NH_White_alone*prop_in
+         , w_NH_Black_alone = NH_Black_alone*prop_in     
+         , w_NH_AIAN_alone  = NH_AIAN_alone *prop_in      
+         , w_NH_Asian_alone = NH_Asian_alone*prop_in     
+         , w_NH_NHPI_alone  = NH_NHPI_alone *prop_in      
+         , w_NH_other       = NH_other      *prop_in      
+         , w_NH_multirace   = NH_multirace  *prop_in
+         ) |> 
+  # arrange(GISJOIN, sesync_id) |> # cosmetic, helps with debugging
+  group_by(sesync_id) |> 
+  summarise(  est_tot_pop        = sum(w_tot_pop)
+            , est_Hisp           = sum(w_Hisp)
+            , est_NH_White_alone = sum(w_NH_White_alone)
+            , est_NH_Black_alone = sum(w_NH_Black_alone)
+            , est_NH_AIAN_alone  = sum(w_NH_AIAN_alone)
+            , est_NH_Asian_alone = sum(w_NH_Asian_alone)
+            , est_NH_NHPI_alone  = sum(w_NH_NHPI_alone)
+            , est_NH_other       = sum(w_NH_other)
+            , est_NH_multirace   = sum(w_NH_multirace)
+            ) |> 
+  mutate(  p_tot_pop        = 100*(est_tot_pop        / est_tot_pop)
+         , p_Hisp           = 100*(est_Hisp           / est_tot_pop)
+         , p_NH_White_alone = 100*(est_NH_White_alone / est_tot_pop)
+         , p_NH_Black_alone = 100*(est_NH_Black_alone / est_tot_pop)
+         , p_NH_AIAN_alone  = 100*(est_NH_AIAN_alone  / est_tot_pop)
+         , p_NH_Asian_alone = 100*(est_NH_Asian_alone / est_tot_pop)
+         , p_NH_NHPI_alone  = 100*(est_NH_NHPI_alone  / est_tot_pop)
+         , p_NH_other       = 100*(est_NH_other       / est_tot_pop)
+         , p_NH_multirace   = 100*(est_NH_multirace   / est_tot_pop)
+         , sum_checker = p_Hisp + p_NH_White_alone + p_NH_Black_alone + p_NH_AIAN_alone + p_NH_Asian_alone + p_NH_NHPI_alone + p_NH_other + p_NH_multirace 
+         ) -> ws_demos
+
+
+ws_demos |> glimpse()
+
+ws_demos |> summary()
+ws_demos |> map(~sum(is.na(.))) |> bind_rows() |> t()
+ws_demos |> filter(is.na(p_tot_pop)) |> pull(sesync_id) -> walksheds_no_demos
+
+ws |> 
+  filter(sesync_id %in% walksheds_no_demos) |> 
+  mapview()
+
+
+```
+
+
+## C how do demos compare?
+```{r}
+
+(
+  ws_demos |> 
+    select(sesync_id, starts_with('est_')) |> 
+    pivot_longer(-sesync_id) |> 
+    group_by(name) |> 
+    summarise(n = sum(value), source = 'TPL walksheds') |> 
+    mutate(name = str_remove_all(name, 'est_')) -> ws_demos_sum
+  )
+
+ws_demos_sum |> 
+  filter(name != 'tot_pop') |> 
+  ggplot(aes(n, name)) +
+  geom_bar(stat = 'identity') + 
+  theme_bw(16) + 
+  scale_x_continuous(labels = scales::comma) +
+  NULL
+
+
+(
+  block_tbl |>
+    select(GISJOIN, tot_pop: NH_multirace) |> 
+    pivot_longer(-GISJOIN) |> 
+    # filter(name != 'tot_pop') |> 
+    group_by(name) |> 
+    summarise(n = sum(value), source = 'Whole Country') -> us_demos_sum
+  )
+
+
+bind_rows(ws_demos_sum, us_demos_sum) |> 
+  filter(name != 'tot_pop') |> 
+  ggplot(aes(n, name, fill = source)) +
+  geom_bar(stat = 'identity', position = 'dodge') + 
+  theme_bw(16) + 
+  scale_x_continuous(labels = scales::comma) +
+  NULL
+
+```
+
 
 
 ## save out
@@ -354,3 +1143,7 @@ sessionInfo()
 Last Knit on `r format(Sys.time())`
 
 # SANDBOX
+```{r}
+
+```
+
