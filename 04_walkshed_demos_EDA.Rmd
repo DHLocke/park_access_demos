@@ -1,0 +1,773 @@
+---
+title: "04_walkshed_demos_EDA"
+author: "Dexter H. Locke, PhD"
+date: "`r format(Sys.time())`"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# 0 load libraries, get oriented
+```{r}
+
+# Load libraries 
+packs <-c(  'tidyverse' # cuz
+          , 'tidylog'   # prints out what was done in dplyr and tidyr; VERBOSE
+          , 'magrittr'  # for all of the the pipes
+          , 'sf'        # for spatial data support
+          # , 'sp'        #  older spatial data support
+          # , 'spdep'     # spatial dependency
+          , 'sfdep'     # remotes::install_github("josiahparry/sfdep")
+          , 'mapview'   # web maps for zooming and panning around
+          , 'beepr'     # makes noises
+          , 'tictoc'    # times things
+          , 'tigris'    # Census geographic data (via TIGER)
+          , 'parallel'  # parallel processing, vroom, vroom
+          )
+
+if (length(setdiff(packs, rownames(installed.packages()))) > 0) {
+  install.packages(setdiff(packs, rownames(installed.packages())))
+}
+
+# load the packages all at once
+vapply(packs, library, character.only = TRUE, logical(1),
+       logical.return = TRUE, quietly = TRUE)
+
+# get oriented
+list.files()
+list.files('input_data')
+
+
+# for reproducibility
+set.seed(19870630)
+
+# fixes mapview
+mapviewOptions(fgb = FALSE)
+# mapviewOptions(platform = "leafgl") #should help with large data.
+
+# custom function for "Not In"
+`%nin%` <- Negate(`%in%`)
+
+
+# function for reclassifying Census codes to graph/table-friendly labels
+handsome_cats <- function(data, var){
+  mutate(
+    data
+    , {{ var }} := str_replace_all({{ var }}, 'Hisp'          , 'Hispanic / Latinx')
+    , {{ var }} := str_replace_all({{ var }}, 'NH_AIAN_alone' , 'NH-Native American and Alaska Native alone')
+    , {{ var }} := str_replace_all({{ var }}, 'NH_Asian_alone', 'NH-Asian alone')
+    , {{ var }} := str_replace_all({{ var }}, 'NH_Black_alone', 'NH-Black or African American alone')
+    , {{ var }} := str_replace_all({{ var }}, 'NH_multirace'  , 'NH two or more races')
+    , {{ var }} := str_replace_all({{ var }}, 'NH_NHPI_alone' , 'NH-Native Hawaiian and Pacific Islander')
+    , {{ var }} := str_replace_all({{ var }}, 'NH_other'      , 'NH-Other')
+    , {{ var }} := str_replace_all({{ var }}, 'NH_White_alone', 'NH-White alone')
+    , {{ var }} := str_replace_all({{ var }}, 'tot_pop'       , 'Total Population')
+  )
+}
+
+
+```
+
+
+
+# 1 read in data
+## A block-walkshed intersection table from meta-batch pieces
+```{r}
+
+# get file names
+(files     <- dir(  'input_data/walkshed_block_intersections'
+                 , recursive = TRUE, pattern = "*.csv$", full.names = TRUE))
+
+removals <- c('input_data/walkshed_block_intersections/walkshed_block_intersections_',
+              '_1_to_43.csv', '_44_to_86.csv', '_87_to_130.csv', '_131_to_172.csv')
+
+
+tic(); (walkshed_block_int_tbl <- tibble(filename = files) %>%
+  mutate(
+    file_contents = map(files, 
+                        ~read_csv(.
+                                  , progress = TRUE
+                                  , col_names = c('sesync_id', 'GISJOIN', 'prop_in')
+                                  ))) |> 
+  unnest(cols = file_contents) |> 
+  # needed?
+  # mutate(meta_batch = as.factor(str_remove_all(filename, paste(removals, collapse = '|')))) |> 
+  select(-filename)); toc()
+
+# 2x check proportion behaves - it does!
+walkshed_block_int_tbl |> summary(prop_in)
+walkshed_block_int_tbl |> 
+  ggplot(aes(prop_in)) +
+  geom_density()
+
+(problem_ints <- walkshed_block_int_tbl |> filter(prop_in > 1) |> arrange(desc(prop_in)))
+
+# problem_ints |> head(20) |> View()
+
+```
+
+
+
+## B Census blocks: tabular 
+```{r}
+
+tic(); (block_tbl <- read_csv('input_data/nhgis0059_csv/nhgis0059_ds248_2020_block.csv'
+                    , col_select = c(  GISJOIN
+                                     , year      = YEAR
+                                     , state     = STATE
+                                     , state_id  = STATEA
+                                     , county    = COUNTY
+                                     , area_land = AREALAND
+                                     , area_water= AREAWATR
+                                     , tot_pop   = U7C001     # Total population
+                                     , Hisp      = U7C002     # Hispanic or Latino
+                                     # NH White alone (not POC). Create a %nhwhite variable
+                                     # that is U7C005/U7C001. This may be prime variable of
+                                     # interest.
+                                     , NH_White_alone = U7C005
+                                     , NH_Black_alone = U7C006      
+                                     , NH_AIAN_alone  = U7C007      
+                                     , NH_Asian_alone = U7C008      
+                                     , NH_NHPI_alone  = U7C009      
+                                     , NH_other       = U7C010      
+                                     , NH_multirace   = U7C011      
+                                     )
+                    )); toc()
+
+```
+
+
+
+## C block-Urban Area look up
+```{r}
+
+
+(ua_assignment_path <- paste0(getwd(), '/input_data/combined_blocks_2020_no_water_single_part_Urban_Area_lookup/block_to_ua_lookup.csv'))
+
+(ua_assignment <- read_csv(ua_assignment_path
+                           , col_names = c('mult_id', 'GISJOIN', 'UACE10', 'UA_name')))
+
+```
+
+
+
+## D Census divisions / regions polygons
+```{r}
+
+(
+  div_regions <- readxl::read_xlsx('input_data/state-geocodes-v2017.xlsx', skip = 4) |> 
+    mutate(div_name = ifelse(Division == '0', Name, NA),
+           region_name = ifelse(Division != '0' & `State (FIPS)` == '00', Name, NA)) |> 
+    fill(div_name, region_name) |> 
+    filter(`State (FIPS)` != '00')
+ )
+
+# 2x check
+div_regions |> distinct(div_name, region_name)
+div_regions |> distinct(Region, Division)
+
+```
+
+
+
+# 2 join tabular blocks, intersection file, urban areas, divisions/ regions
+```{r eval=FALSE, include=FALSE}
+# # in-memory tests
+# walkshed_block_int_tbl |> left_join(block_tbl, by = 'GISJOIN')
+# walkshed_block_int_tbl |> anti_join(block_tbl, by = 'GISJOIN')
+
+tic(); (
+  blocks_tbl_augmented <- block_tbl |>
+    left_join(walkshed_block_int_tbl, by = 'GISJOIN') |>                    # walk Ints +sesync_ids
+    left_join(ua_assignment |> select(GISJOIN, UA_name), by = 'GISJOIN') |> # Urban Areas
+    left_join(div_regions |>                                                # divs / regions
+              select(state_id = `State (FIPS)`, div_name, region_name), by = 'state_id')); toc() # ~20s
+```
+
+
+
+# 3 Demo summaries 
+## A data-prep: whole country and extract non-walkshed blocks
+```{r}
+# # blocks_tbl_augmented |> 
+# non_ws_demos <- block_tbl |> 
+#   # filter(state == 'Rhode Island') |> # just used for testing
+#   left_join(walkshed_block_int_tbl, by = 'GISJOIN') |> 
+#   filter(is.na(sesync_id)) #|> # finds blocks not in walkshed
+
+# get whole-country demographics
+(
+  USA_total_demos <- block_tbl |> 
+    select(GISJOIN, tot_pop : NH_multirace) |> 
+    pivot_longer(-GISJOIN) |> 
+    group_by(name) |> 
+    # summarise(n = sum(value, na.rm = TRUE), source = 'usa_total_demos')
+    summarise(usa_total_demos = sum(value, na.rm = TRUE))
+  )
+
+# test out custom labeling function.
+USA_total_demos |> handsome_cats(name)
+# USA_total_demos |> handsome_cats(name) |>
+#   write_csv(paste0(getwd(), '/output_tables/USA_total_demos_', Sys.Date(), '.csv'))
+
+
+# finds blocks NOT in walkshed
+(
+  non_ws_demos <- block_tbl |> 
+    # filter(state == 'Rhode Island') |> # just used for testing
+    anti_join(walkshed_block_int_tbl, by = 'GISJOIN')
+  )
+
+
+# 2x checks
+non_ws_demos |> glimpse()
+non_ws_demos |> summary()
+non_ws_demos |> map(~sum(is.na(.))) |> bind_rows() |> t()
+
+```
+
+
+## B national access
+```{r}
+
+# get non-walkshed demographics for the country
+(
+  non_ws_demos_sum <- non_ws_demos |> 
+    select(GISJOIN, tot_pop : NH_multirace) |> 
+    pivot_longer(-GISJOIN) |> 
+    group_by(name) |> 
+    # summarise(n = sum(value, na.rm = TRUE), source = 'non_ws_demos')
+    summarise(non_ws_demos = sum(value, na.rm = TRUE))
+  )
+
+
+# combine non-walkshed and whole country in wide format, calc ws demos as difference btw non and whole
+(
+  combined_demos_wide <- non_ws_demos_sum |>
+    left_join(USA_total_demos) |>
+    mutate(ws_demos = usa_total_demos - non_ws_demos
+           # , ratio = ws_demos / non_ws_demos
+           )
+  )
+
+# # save out
+# combined_demos_wide |> 
+#   handsome_cats(name) |>
+#   write_csv(paste0(getwd(), '/output_tables/combined_demos_wide_', Sys.Date(), '.csv'))
+
+
+# make long form for graphing
+(
+  combined_demos_long <- combined_demos_wide |> 
+    select(name, non_ws_demos, ws_demos) |> 
+    pivot_longer(-name, names_to = 'source')
+  )
+
+# # save out
+# combined_demos_long |>
+#   handsome_cats(name) |>
+#   write_csv(paste0(getwd(), '/output_tables/combined_demos_long_', Sys.Date(), '.csv'))
+
+
+# viz
+combined_demos_long |> 
+  mutate(' ' = fct_recode(factor(source)
+                          , `Oustside 10-minute walk` = 'non_ws_demos'
+                          , `Within 10-minute walk` = 'ws_demos'
+                          )) |> 
+  # filter(name != 'tot_pop') |> 
+  handsome_cats(name) |> 
+  ggplot(aes(value, name, fill = ` `)) + 
+  geom_col(position = 'dodge') + 
+  theme_bw(18) + 
+  labs(  title = 'Park Access by Race/Ethnicity'
+       , subtitle = 'entire USA'
+       , y = ''
+       , x = 'Estimated number of people'
+       , caption = 'NH = Non-Hispanic\nData Sources: Trust for Public Land walkshed;\nU.S. Census Bureau 2020 blocks') +
+  scale_x_continuous(labels = scales::comma, expand = c(0, 0), lim = c(0, 2e8)) +
+  scale_fill_viridis_d() + 
+  # theme(legend.position = 'bottom') + 
+  NULL
+
+# # save it out
+# ggsave(file = paste0(getwd(), '/figures/usa_park_access_10min_', Sys.Date(), '.png')
+#        , width = 7*2, height = 4*2)
+
+
+# people WITHOUT ACCESS
+non_ws_demos_sum |> 
+  filter(name != 'tot_pop') |> 
+  handsome_cats(name) |> 
+  ggplot(aes(non_ws_demos, name)) +
+  geom_col() + 
+  theme_bw(16) + 
+  scale_x_continuous(labels = scales::comma) +
+  NULL
+
+
+```
+
+
+## C urban vs not
+```{r}
+
+# get whole-country demographics
+(
+  USA_total_demos_urban_or_not_summ <- block_tbl |> 
+    left_join(ua_assignment |> select(GISJOIN, UA_name), by = 'GISJOIN') |> # Urban Areas
+    mutate(urban = ifelse(is.na(UA_name), 'not urban', 'urban')) |> 
+    select(GISJOIN, urban, tot_pop : NH_multirace) |> 
+    pivot_longer(cols = c(tot_pop : NH_multirace)) |>
+    group_by(urban, name) |> 
+    # summarise(n = sum(value, na.rm = TRUE), source = 'usa_total_demos')
+    summarise(usa_total_demos = sum(value, na.rm = TRUE))
+  )
+
+
+( # NOT IN WALKSHEDS
+  non_ws_demos_urban_summ <- block_tbl |> 
+  # filter(state == 'Rhode Island') |> # just used for testing
+    anti_join(walkshed_block_int_tbl, by = 'GISJOIN') |>                    # finds blocks NOT in walkshed
+    left_join(ua_assignment |> select(GISJOIN, UA_name), by = 'GISJOIN') |> # Urban Areas
+    mutate(urban = ifelse(is.na(UA_name), 'not urban', 'urban')) |> 
+    select(GISJOIN, urban, tot_pop : NH_multirace) |> 
+    pivot_longer(cols = c(tot_pop : NH_multirace)) |>
+    group_by(urban, name) |> 
+    summarise(non_ws_demos = sum(value, na.rm = TRUE))
+  )
+
+# combine non-walkshed and whole country in wide format, calc ws demos as difference btw non and whole
+(
+  combined_demos_urban_wide <- non_ws_demos_urban_summ |>
+    left_join(USA_total_demos_urban_or_not_summ, by = c('urban', 'name')) |>
+    mutate(ws_demos = usa_total_demos - non_ws_demos
+           # , ratio = ws_demos / non_ws_demos
+           ) |> 
+    relocate(usa_total_demos, .after = last_col())
+  )
+
+# # write out
+# combined_demos_urban_wide |>
+#   handsome_cats(name) |>
+#   write_csv(paste0(getwd(), '/output_tables/combined_demos_urban_wide_', Sys.Date(), '.csv'))
+
+
+# make long form for graphing
+(
+  combined_demos_urban_long <- combined_demos_urban_wide |> 
+    select(name, urban, non_ws_demos, ws_demos) |> 
+    pivot_longer(cols = c(non_ws_demos, ws_demos), names_to = 'source')
+  )
+
+# # write out
+# combined_demos_urban_long |> 
+#   handsome_cats(name) |>
+#   write_csv(paste0(getwd(), '/output_tables/combined_demos_urban_long_', Sys.Date(), '.csv'))
+
+
+# viz urban vs not, within vs outside walk by race/ethnicity
+combined_demos_urban_long |> 
+  mutate(' ' = fct_recode(factor(source)
+                          , `Oustside 10-minute walk` = 'non_ws_demos'
+                          , `Within 10-minute walk` = 'ws_demos'
+                          )) |> 
+  # filter(name != 'tot_pop') |> 
+  handsome_cats(name) |> 
+  ggplot(aes(value, name, fill = ` `)) + 
+  geom_col(position = 'dodge') + 
+  theme_bw(18) + 
+  labs(  title = 'Park Access by Race/Ethnicity and Urbanicity'
+       # , subtitle = ''
+       , y = ''
+       , x = 'Estimated number of people'
+       , caption = 'NH = Non-Hispanic\nData Sources: Trust for Public Land walkshed;\nU.S. Census Bureau 2020 blocks') +
+  # scale_x_continuous(labels = scales::comma, expand = c(0, 0), lim = c(0, 2e8)) +
+  scale_x_continuous(labels = scales::label_number(suffix = " M", scale = 1e-6)
+                     # , expand = c(0, 0)
+                     ) + # millions
+  scale_fill_viridis_d() + 
+  theme(axis.text.x = element_text(angle = 90, vjust = .5)) +
+  facet_wrap(~urban) + 
+  theme(legend.position = 'bottom') + 
+  NULL
+
+# # save it out
+# ggsave(file = paste0(getwd(), '/figures/USA_park_access_10min_urban_vs_not_', Sys.Date(), '.png')
+#        , width = 7*2, height = 4*2)
+
+
+```
+
+
+## D urban only
+```{r}
+
+# viz urban only, within vs outside walk by race/ethnicity
+combined_demos_urban_long |> 
+  mutate(' ' = fct_recode(factor(source)
+                          , `Oustside 10-minute walk` = 'non_ws_demos'
+                          , `Within 10-minute walk` = 'ws_demos'
+                          )) |> 
+  # filter(name != 'tot_pop') |> 
+  handsome_cats(name) |> 
+  filter(urban == 'urban') |> 
+  ggplot(aes(value, name, fill = ` `)) + 
+  geom_col(position = 'dodge') + 
+  theme_bw(18) + 
+  labs(  title = 'Park Access by Race/Ethnicity'
+       , subtitle = 'Urban Areas only'
+       , y = ''
+       , x = 'Estimated number of people'
+       , caption = 'NH = Non-Hispanic\nData Sources: Trust for Public Land walkshed;\nU.S. Census Bureau 2020 blocks') +
+  # scale_x_continuous(labels = scales::comma, expand = c(0, 0), lim = c(0, 2e8)) +
+  scale_x_continuous(labels = scales::label_number(suffix = " M", scale = 1e-6)
+                     , expand = c(0, 0)
+                     , limits = c(0, 2e8)
+                     ) + # millions
+  scale_fill_viridis_d() + 
+  theme(axis.text.x = element_text(angle = 90, vjust = .5)) +
+  theme(legend.position = 'bottom') + 
+  NULL
+
+# # save it out
+# ggsave(file = paste0(getwd(), '/figures/usa_park_access_10min_urban_only_', Sys.Date(), '.png')
+#        , width = 7*2, height = 4*2)
+
+```
+
+
+## E Divisions - urban only
+```{r}
+
+# get whole-country demographics by urban and division
+(
+  USA_total_demos_divisions_urban_summ <- block_tbl |> 
+    left_join(ua_assignment |> select(GISJOIN, UA_name), by = 'GISJOIN') |> # Urban Areas
+    mutate(urban = ifelse(is.na(UA_name), 'not urban', 'urban')) |> 
+    left_join(div_regions |>                                                # divisions
+              select(state_id = `State (FIPS)`, Division = div_name), by = 'state_id') |> 
+    select(GISJOIN, Division, urban, tot_pop : NH_multirace) |> 
+    pivot_longer(cols = c(tot_pop : NH_multirace)) |>
+    group_by(Division, urban, name) |> 
+    summarise(usa_total_demos = sum(value, na.rm = TRUE))
+  )
+
+
+( # NOT IN WALKSHEDS
+  non_ws_demos_divisions_urban_summ <- block_tbl |> 
+  # filter(state == 'Rhode Island') |> # just used for testing
+    anti_join(walkshed_block_int_tbl, by = 'GISJOIN') |>              # finds blocks NOT in walkshed
+    left_join(ua_assignment |> select(GISJOIN, UA_name), by = 'GISJOIN') |> # Urban Areas
+    mutate(urban = ifelse(is.na(UA_name), 'not urban', 'urban')) |> 
+    left_join(div_regions |>                                                # divisions
+                select(state_id = `State (FIPS)`, Division = div_name), by = 'state_id') |> 
+    select(GISJOIN, Division, urban, tot_pop : NH_multirace) |> 
+    pivot_longer(cols = c(tot_pop : NH_multirace)) |>
+    group_by(Division, urban, name) |> 
+    summarise(non_ws_demos = sum(value, na.rm = TRUE))
+  )
+
+# combine non-walkshed and whole country in wide format, calc ws demos as difference btw non and whole
+(
+  combined_demos_divisions_urban_wide <- non_ws_demos_divisions_urban_summ |>
+    left_join(USA_total_demos_divisions_urban_summ, by = c('Division', 'urban', 'name')) |>
+    mutate(ws_demos = usa_total_demos - non_ws_demos
+           # , ratio = ws_demos / non_ws_demos
+           ) |> 
+    relocate(usa_total_demos, .after = last_col())
+  )
+
+# # write out
+# combined_demos_divisions_urban_wide |>
+#   handsome_cats(name) |>
+#   write_csv(paste0(getwd(), '/output_tables/combined_demos_divisions_urban_wide_', Sys.Date(), '.csv'))
+
+
+# make long form for graphing
+(
+  combined_demos_divisions_urban_long <- combined_demos_divisions_urban_wide |> 
+    select(name, urban, non_ws_demos, ws_demos) |> 
+    pivot_longer(cols = c(non_ws_demos, ws_demos), names_to = 'source')
+  )
+
+# # write out
+# combined_demos_divisions_urban_long |> 
+#   handsome_cats(name) |>
+#   write_csv(paste0(getwd(), '/output_tables/combined_demos_divisions_urban_long_', Sys.Date(), '.csv'))
+
+
+# viz urban vs not, within vs outside walk by race/ethnicity
+combined_demos_divisions_urban_long |> 
+  mutate(' ' = fct_recode(factor(source)
+                          , `Oustside 10-minute walk` = 'non_ws_demos'
+                          , `Within 10-minute walk` = 'ws_demos'
+                          )) |> 
+  # filter(name != 'tot_pop') |> 
+  handsome_cats(name) |> 
+  filter(urban == 'urban') |> 
+  ggplot(aes(value, name, fill = ` `)) + 
+  geom_col(position = 'dodge') + 
+  theme_bw(18) + 
+  labs(  title = 'Park Access by Race/Ethnicity and Division'
+       , subtitle = 'Urban areas only'
+       , y = ''
+       , x = 'Estimated number of people'
+       , caption = 'NH = Non-Hispanic\nData Sources: Trust for Public Land walkshed;\nU.S. Census Bureau 2020 blocks') +
+  # scale_x_continuous(labels = scales::comma, expand = c(0, 0), lim = c(0, 2e8)) +
+  scale_x_continuous(labels = scales::label_number(suffix = " M", scale = 1e-6)
+                     , expand = c(0, 0), limits = c(0, 6e7)
+                     ) + # millions
+  scale_fill_viridis_d() + 
+  theme(axis.text.x = element_text(angle = 90, vjust = .5)) +
+  theme(legend.position = 'bottom') + 
+  facet_wrap(~Division) + 
+  NULL
+
+# # save it out
+ggsave(file = paste0(getwd(), '/figures/Divisions_park_access_10min_urban_only_', Sys.Date(), '.png')
+       , width = 7*2, height = 4*2)
+
+
+```
+
+
+
+## E Regions - urban only
+```{r}
+
+# get whole-country demographics by urban and region
+(
+  USA_total_demos_regions_urban_summ <- block_tbl |> 
+    left_join(ua_assignment |> select(GISJOIN, UA_name), by = 'GISJOIN') |> # Urban Areas
+    mutate(urban = ifelse(is.na(UA_name), 'not urban', 'urban')) |> 
+    left_join(div_regions |>                                                # divisions
+              select(state_id = `State (FIPS)`, Region = region_name), by = 'state_id') |> 
+    select(GISJOIN, Region, urban, tot_pop : NH_multirace) |> 
+    pivot_longer(cols = c(tot_pop : NH_multirace)) |>
+    group_by(Region, urban, name) |> 
+    summarise(usa_total_demos = sum(value, na.rm = TRUE))
+  )
+
+
+( # NOT IN WALKSHEDS
+  non_ws_demos_regions_urban_summ <- block_tbl |> 
+  # filter(state == 'Rhode Island') |> # just used for testing
+    anti_join(walkshed_block_int_tbl, by = 'GISJOIN') |>              # finds blocks NOT in walkshed
+    left_join(ua_assignment |> select(GISJOIN, UA_name), by = 'GISJOIN') |> # Urban Areas
+    mutate(urban = ifelse(is.na(UA_name), 'not urban', 'urban')) |> 
+    left_join(div_regions |>                                                # divisions
+              select(state_id = `State (FIPS)`, Region = region_name), by = 'state_id') |> 
+    select(GISJOIN, Region, urban, tot_pop : NH_multirace) |> 
+    pivot_longer(cols = c(tot_pop : NH_multirace)) |>
+    group_by(Region, urban, name) |> 
+    summarise(non_ws_demos = sum(value, na.rm = TRUE))
+  )
+
+# combine non-walkshed and whole country in wide format, calc ws demos as difference btw non and whole
+(
+  combined_demos_divisions_urban_wide <- non_ws_demos_regions_urban_summ |>
+    left_join(USA_total_demos_regions_urban_summ, by = c('Region', 'urban', 'name')) |>
+    mutate(ws_demos = usa_total_demos - non_ws_demos
+           # , ratio = ws_demos / non_ws_demos
+           ) |> 
+    relocate(usa_total_demos, .after = last_col())
+  )
+
+# # write out
+# combined_demos_divisions_urban_wide |>
+#   handsome_cats(name) |>
+#   write_csv(paste0(getwd(), '/output_tables/combined_demos_divisions_urban_wide_', Sys.Date(), '.csv'))
+
+
+# make long form for graphing
+(
+  combined_demos_divisions_urban_long <- combined_demos_divisions_urban_wide |> 
+    select(name, urban, non_ws_demos, ws_demos) |> 
+    pivot_longer(cols = c(non_ws_demos, ws_demos), names_to = 'source')
+  )
+
+# # write out
+# combined_demos_divisions_urban_long |> 
+#   handsome_cats(name) |>
+#   write_csv(paste0(getwd(), '/output_tables/combined_demos_divisions_urban_long_', Sys.Date(), '.csv'))
+
+
+# viz urban vs not, within vs outside walk by race/ethnicity
+combined_demos_divisions_urban_long |> 
+  mutate(' ' = fct_recode(factor(source)
+                          , `Oustside 10-minute walk` = 'non_ws_demos'
+                          , `Within 10-minute walk` = 'ws_demos'
+                          )) |> 
+  # filter(name != 'tot_pop') |> 
+  handsome_cats(name) |> 
+  filter(urban == 'urban') |> 
+  ggplot(aes(value, name, fill = ` `)) + 
+  geom_col(position = 'dodge') + 
+  theme_bw(18) + 
+  labs(  title = 'Park Access by Race/Ethnicity and Region'
+       , subtitle = 'Urban areas only'
+       , y = ''
+       , x = 'Estimated number of people'
+       , caption = 'NH = Non-Hispanic\nData Sources: Trust for Public Land walkshed;\nU.S. Census Bureau 2020 blocks') +
+  # scale_x_continuous(labels = scales::comma, expand = c(0, 0), lim = c(0, 2e8)) +
+  scale_x_continuous(labels = scales::label_number(suffix = " M", scale = 1e-6)
+                     , expand = c(0, 0), limits = c(0, 45e6)
+                     ) + # millions
+  scale_fill_viridis_d() + 
+  theme(axis.text.x = element_text(angle = 90, vjust = .5)) +
+  theme(legend.position = 'bottom') + 
+  facet_wrap(~str_wrap(Region, 20)) + 
+  NULL
+
+# # save it out
+# ggsave(file = paste0(getwd(), '/figures/Regions_park_access_10min_urban_only_', Sys.Date(), '.png')
+#        , width = 7*2, height = 4*3 )
+
+
+```
+
+
+
+## save out
+
+```{r eval=FALSE, include=FALSE}
+# save.image("saved_sessions/04_walkshed_demos_EDA.RData") 
+```
+
+## CITE your sources!!!
+
+```{r}
+lapply(packs, citation); rm(packs)
+sessionInfo()
+```
+
+Last Knit on `r format(Sys.time())`
+
+# SANDBOX
+```{r}
+
+
+# mutate(  p_tot_pop        = ifelse(tot_pop == 0, 0, 100*(tot_pop        / tot_pop))
+  #        , p_Hisp           = ifelse(tot_pop == 0, 0, 100*(Hisp           / tot_pop))
+  #        , p_NH_White_alone = ifelse(tot_pop == 0, 0, 100*(NH_White_alone / tot_pop))
+  #        , p_NH_Black_alone = ifelse(tot_pop == 0, 0, 100*(NH_Black_alone / tot_pop))
+  #        , p_NH_AIAN_alone  = ifelse(tot_pop == 0, 0, 100*(NH_AIAN_alone  / tot_pop))
+  #        , p_NH_Asian_alone = ifelse(tot_pop == 0, 0, 100*(NH_Asian_alone / tot_pop))
+  #        , p_NH_NHPI_alone  = ifelse(tot_pop == 0, 0, 100*(NH_NHPI_alone  / tot_pop))
+  #        , p_NH_other       = ifelse(tot_pop == 0, 0, 100*(NH_other       / tot_pop))
+  #        , p_NH_multirace   = ifelse(tot_pop == 0, 0, 100*(NH_multirace   / tot_pop))
+  #        , sum_checker = p_Hisp + p_NH_White_alone + p_NH_Black_alone + p_NH_AIAN_alone + p_NH_Asian_alone + p_NH_NHPI_alone + p_NH_other + p_NH_multirace 
+  #        ) 
+
+```
+
+
+
+
+
+# ?make walkshed-level estimates
+```{r}
+# make walkshed-level estimates
+block_tbl |> 
+  right_join(walkshed_block_int_tbl, by = 'GISJOIN') |> # filter(is.na(sesync_id))
+  mutate(  w_tot_pop        = tot_pop       *prop_in
+         , w_Hisp           = Hisp          *prop_in
+         , w_NH_White_alone = NH_White_alone*prop_in
+         , w_NH_Black_alone = NH_Black_alone*prop_in     
+         , w_NH_AIAN_alone  = NH_AIAN_alone *prop_in      
+         , w_NH_Asian_alone = NH_Asian_alone*prop_in     
+         , w_NH_NHPI_alone  = NH_NHPI_alone *prop_in      
+         , w_NH_other       = NH_other      *prop_in      
+         , w_NH_multirace   = NH_multirace  *prop_in
+         ) |> 
+  # arrange(GISJOIN, sesync_id) |> # cosmetic, helps with debugging
+  group_by(sesync_id) |> 
+  summarise(  est_tot_pop        = sum(w_tot_pop)
+            , est_Hisp           = sum(w_Hisp)
+            , est_NH_White_alone = sum(w_NH_White_alone)
+            , est_NH_Black_alone = sum(w_NH_Black_alone)
+            , est_NH_AIAN_alone  = sum(w_NH_AIAN_alone)
+            , est_NH_Asian_alone = sum(w_NH_Asian_alone)
+            , est_NH_NHPI_alone  = sum(w_NH_NHPI_alone)
+            , est_NH_other       = sum(w_NH_other)
+            , est_NH_multirace   = sum(w_NH_multirace)
+            ) |> 
+  mutate(  p_tot_pop        = 100*(est_tot_pop        / est_tot_pop)
+         , p_Hisp           = 100*(est_Hisp           / est_tot_pop)
+         , p_NH_White_alone = 100*(est_NH_White_alone / est_tot_pop)
+         , p_NH_Black_alone = 100*(est_NH_Black_alone / est_tot_pop)
+         , p_NH_AIAN_alone  = 100*(est_NH_AIAN_alone  / est_tot_pop)
+         , p_NH_Asian_alone = 100*(est_NH_Asian_alone / est_tot_pop)
+         , p_NH_NHPI_alone  = 100*(est_NH_NHPI_alone  / est_tot_pop)
+         , p_NH_other       = 100*(est_NH_other       / est_tot_pop)
+         , p_NH_multirace   = 100*(est_NH_multirace   / est_tot_pop)
+         , sum_checker = p_Hisp + p_NH_White_alone + p_NH_Black_alone + p_NH_AIAN_alone + p_NH_Asian_alone + p_NH_NHPI_alone + p_NH_other + p_NH_multirace 
+         ) -> ws_demos
+
+
+ws_demos |> glimpse()
+
+ws_demos |> summary()
+ws_demos |> map(~sum(is.na(.))) |> bind_rows() |> t()
+ws_demos |> filter(is.na(p_tot_pop)) |> pull(sesync_id) -> walksheds_no_demos
+
+ws |> 
+  filter(sesync_id %in% walksheds_no_demos) |> 
+  mapview()
+
+
+```
+
+
+## ?C how do demos compare?
+```{r}
+
+(
+  ws_demos |> 
+    select(sesync_id, starts_with('est_')) |> 
+    pivot_longer(-sesync_id) |> 
+    group_by(name) |> 
+    summarise(n = sum(value), source = 'TPL walksheds') |> 
+    mutate(name = str_remove_all(name, 'est_')) -> ws_demos_sum
+  )
+
+ws_demos_sum |> 
+  filter(name != 'tot_pop') |> 
+  ggplot(aes(n, name)) +
+  geom_bar(stat = 'identity') + 
+  theme_bw(16) + 
+  scale_x_continuous(labels = scales::comma) +
+  NULL
+
+
+(
+  block_tbl |>
+    select(GISJOIN, tot_pop: NH_multirace) |> 
+    pivot_longer(-GISJOIN) |> 
+    # filter(name != 'tot_pop') |> 
+    group_by(name) |> 
+    summarise(n = sum(value), source = 'Whole Country') -> us_demos_sum
+  )
+
+
+bind_rows(ws_demos_sum, us_demos_sum) |> 
+  filter(name != 'tot_pop') |> 
+  ggplot(aes(n, name, fill = source)) +
+  geom_bar(stat = 'identity', position = 'dodge') + 
+  theme_bw(16) + 
+  scale_x_continuous(labels = scales::comma) +
+  NULL
+
+```
+
+
+
+

@@ -1,0 +1,19 @@
+name,source,value
+Hispanic / Latinx,non_ws_demos,22721119
+Hispanic / Latinx,ws_demos,42607968
+NH-Native American and Alaska Native alone,non_ws_demos,1374463
+NH-Native American and Alaska Native alone,ws_demos,877548
+NH-Asian alone,non_ws_demos,4919458
+NH-Asian alone,ws_demos,14702007
+NH-Black or African American alone,non_ws_demos,14315165
+NH-Black or African American alone,ws_demos,25629459
+NH two or more races,non_ws_demos,5781693
+NH two or more races,ws_demos,7769630
+NH-Native Hawaiian and Pacific Islander,non_ws_demos,182900
+NH-Native Hawaiian and Pacific Islander,ws_demos,439209
+NH-Other,non_ws_demos,616179
+NH-Other,ws_demos,1076162
+NH-White alone,non_ws_demos,94554305
+NH-White alone,ws_demos,97167890
+Total Population,non_ws_demos,144465282
+Total Population,ws_demos,190269873

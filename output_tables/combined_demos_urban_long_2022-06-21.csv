@@ -1,0 +1,37 @@
+name,urban,source,value
+Hispanic / Latinx,not urban,non_ws_demos,8087869
+Hispanic / Latinx,not urban,ws_demos,417950
+NH-Native American and Alaska Native alone,not urban,non_ws_demos,964954
+NH-Native American and Alaska Native alone,not urban,ws_demos,27329
+NH-Asian alone,not urban,non_ws_demos,770760
+NH-Asian alone,not urban,ws_demos,152787
+NH-Black or African American alone,not urban,non_ws_demos,3547305
+NH-Black or African American alone,not urban,ws_demos,247991
+NH two or more races,not urban,non_ws_demos,2403204
+NH two or more races,not urban,ws_demos,147856
+NH-Native Hawaiian and Pacific Islander,not urban,non_ws_demos,49953
+NH-Native Hawaiian and Pacific Islander,not urban,ws_demos,7192
+NH-Other,not urban,non_ws_demos,202584
+NH-Other,not urban,ws_demos,13698
+NH-White alone,not urban,non_ws_demos,49211747
+NH-White alone,not urban,ws_demos,3154982
+Total Population,not urban,non_ws_demos,65238376
+Total Population,not urban,ws_demos,4169785
+Hispanic / Latinx,urban,non_ws_demos,14656518
+Hispanic / Latinx,urban,ws_demos,42256741
+NH-Native American and Alaska Native alone,urban,non_ws_demos,409793
+NH-Native American and Alaska Native alone,urban,ws_demos,851175
+NH-Asian alone,urban,non_ws_demos,4162711
+NH-Asian alone,urban,ws_demos,14583520
+NH-Black or African American alone,urban,non_ws_demos,10786588
+NH-Black or African American alone,urban,ws_demos,25426568
+NH two or more races,urban,non_ws_demos,3384260
+NH two or more races,urban,ws_demos,7635819
+NH-Native Hawaiian and Pacific Islander,urban,non_ws_demos,133022
+NH-Native Hawaiian and Pacific Islander,urban,ws_demos,432304
+NH-Other,urban,non_ws_demos,414375
+NH-Other,urban,ws_demos,1064326
+NH-White alone,urban,non_ws_demos,45476346
+NH-White alone,urban,ws_demos,94322131
+Total Population,urban,non_ws_demos,79423613
+Total Population,urban,ws_demos,186572584

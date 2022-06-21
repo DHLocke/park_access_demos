@@ -1,0 +1,168 @@
+---
+title: "give_blocks_division_codes"
+author: "Dexter H. Locke, PhD"
+date: "`r format(Sys.time())`"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# 0 load libraries, get oriented
+
+```{r}
+# Load libraries 
+packs <-c(  'tidyverse' # cuz
+          , 'tidylog'   # prints out what was done in dplyr and tidyr; VERBOSE
+          , 'magrittr'  # for all of the the pipes
+          , 'sf'        # for spatial data support
+          # , 'sp'        #  older spatial data support
+          # , 'spdep'     # spatial dependency
+          # , 'sfdep'     # remotes::install_github("josiahparry/sfdep")
+          , 'mapview'   # web maps for zooming and panning around
+          , 'beepr'     # makes noises
+          , 'tictoc'    # times things
+          , 'tigris'    # Census geographic data (via TIGER)
+          # , 'parallel'  # parallel processing, vroom, vroom
+          )
+
+if (length(setdiff(packs, rownames(installed.packages()))) > 0) {
+  install.packages(setdiff(packs, rownames(installed.packages())))
+}
+
+# load the packages all at once
+vapply(packs, library, character.only = TRUE, logical(1),
+       logical.return = TRUE, quietly = TRUE)
+
+# get oriented
+list.files()
+list.files('input_data')
+
+
+# for reproducibility
+set.seed(19870630)
+
+# fixes mapview
+mapviewOptions(fgb = FALSE)
+# mapviewOptions(platform = "leafgl") #should help with large data.
+
+# custom function for "Not In"
+`%nin%` <- Negate(`%in%`)
+
+```
+
+
+
+
+# 1 read in census divisions polygons
+```{r}
+
+(div <- st_read('input_data/cb_2018_us_division_500k/cb_2018_us_division_500k.shp') |> 
+   select(DIVISIONCE, div_name = NAME))
+
+# https://www2.census.gov/geo/pdfs/maps-data/maps/reference/us_regdiv.pdf
+
+# https://www.census.gov/programs-surveys/economic-census/guidance-geographies/levels.html#par_textimage_34
+
+
+# mapview(div)
+
+# dim(div)
+# div |> st_drop_geometry() |> distinct(DIVISIONCE) |> dim()
+```
+
+
+
+# 2 read in indented table, make legit lookup
+```{r}
+
+(
+  div_regions <- readxl::read_xlsx('input_data/state-geocodes-v2017.xlsx', skip = 4) |> 
+    mutate(div_name = ifelse(Division == '0', Name, NA),
+           region_name = ifelse(Division != '0' & `State (FIPS)` == '00', Name, NA)) |> 
+    fill(div_name, region_name) |> 
+    filter(`State (FIPS)` != '00')
+ )
+
+# 2x check
+div_regions |> distinct(div_name, region_name)
+div_regions |> distinct(Region, Division)
+
+```
+
+
+
+# 2 Blocks (spatial) - get centroid, intersect, write out.
+```{r eval=FALSE, include=FALSE}
+
+# this will be the iterator for querying states
+(state_codes <- read_csv('input_data/ws_cty_int_lookup_batch_size_850_2022-04-27.csv') |> 
+  distinct(stcode, st) |> 
+  arrange(stcode))
+
+
+combined_layer <- '/Users/dlocke/SESYNC/sesync_greenspace/park_access/park_access_demos/input_data/combined_blocks_2020_no_water_single_part/combined_blocks_2020_no_water_single_part.gpkg'
+
+
+(query_start <- 'SELECT * FROM "combined_blocks_2020_no_water_single_part" WHERE stcode = ')
+
+
+
+tic(); for(i in state_codes$stcode){ # loop through each state code
+  tic() # iteration clock in
+  # cat('working on sesync_id:', i, '\n')
+  cat('\n working on batch:', i, '\n')
+  
+  # read in only the polygons of ith state
+  st_read(
+    combined_layer
+    , query = paste0(query_start, "\"", i, "\"") # SQL in R is strange because of special chars..
+    , as_tibble = TRUE) |>
+    st_make_valid() |> 
+    st_transform(crs = st_crs(div)) |> 
+    st_centroid() |> 
+    st_intersection(div) |> 
+    st_drop_geometry() |> 
+    select(mult_id, GISJOIN, UACE10, UA_name) |> # use these names on import!
+    write_csv(file = paste0(getwd(),
+                            '/input_data/combined_blocks_2020_no_water_single_part_cb_2018_us_division_500k/block_to_ua_lookup.csv'
+    )
+    , append = TRUE
+    , progress = TRUE)
+  cat('intersect duration: ')
+  toc()  # clock out of the i-th iteration
+  beepr::beep()
+}; toc() # end loop and clock out
+
+ 
+```
+
+
+## save out
+
+```{r eval=FALSE, include=FALSE}
+# save.image("saved_sessions/02_give_blocks_urban_codes.RData") 
+```
+
+
+## CITE your sources!!!
+
+```{r}
+lapply(packs, citation); rm(packs)
+sessionInfo()
+```
+
+Last Knit on `r format(Sys.time())`
+
+# SANDBOX
+```{r}
+
+```
+

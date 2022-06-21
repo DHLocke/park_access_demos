@@ -1,0 +1,343 @@
+Region,name,urban,source,value
+East North Central Division,Hispanic / Latinx,not urban,non_ws_demos,288395
+East North Central Division,Hispanic / Latinx,not urban,ws_demos,21114
+East North Central Division,NH-Native American and Alaska Native alone,not urban,non_ws_demos,53739
+East North Central Division,NH-Native American and Alaska Native alone,not urban,ws_demos,1787
+East North Central Division,NH-Asian alone,not urban,non_ws_demos,61761
+East North Central Division,NH-Asian alone,not urban,ws_demos,10947
+East North Central Division,NH-Black or African American alone,not urban,non_ws_demos,97022
+East North Central Division,NH-Black or African American alone,not urban,ws_demos,10829
+East North Central Division,NH two or more races,not urban,non_ws_demos,330025
+East North Central Division,NH two or more races,not urban,ws_demos,17293
+East North Central Division,NH-Native Hawaiian and Pacific Islander,not urban,non_ws_demos,2297
+East North Central Division,NH-Native Hawaiian and Pacific Islander,not urban,ws_demos,133
+East North Central Division,NH-Other,not urban,non_ws_demos,24522
+East North Central Division,NH-Other,not urban,ws_demos,1306
+East North Central Division,NH-White alone,not urban,non_ws_demos,9008460
+East North Central Division,NH-White alone,not urban,ws_demos,486645
+East North Central Division,Total Population,not urban,non_ws_demos,9866221
+East North Central Division,Total Population,not urban,ws_demos,550054
+East North Central Division,Hispanic / Latinx,urban,non_ws_demos,634220
+East North Central Division,Hispanic / Latinx,urban,ws_demos,3488028
+East North Central Division,NH-Native American and Alaska Native alone,urban,non_ws_demos,23274
+East North Central Division,NH-Native American and Alaska Native alone,urban,ws_demos,65558
+East North Central Division,NH-Asian alone,urban,non_ws_demos,399860
+East North Central Division,NH-Asian alone,urban,ws_demos,1250611
+East North Central Division,NH-Black or African American alone,urban,non_ws_demos,1017968
+East North Central Division,NH-Black or African American alone,urban,ws_demos,4479379
+East North Central Division,NH two or more races,urban,non_ws_demos,425015
+East North Central Division,NH two or more races,urban,ws_demos,1055737
+East North Central Division,NH-Native Hawaiian and Pacific Islander,urban,non_ws_demos,3288
+East North Central Division,NH-Native Hawaiian and Pacific Islander,urban,ws_demos,9005
+East North Central Division,NH-Other,urban,non_ws_demos,37818
+East North Central Division,NH-Other,urban,ws_demos,106870
+East North Central Division,NH-White alone,urban,non_ws_demos,7266943
+East North Central Division,NH-White alone,urban,ws_demos,16802587
+East North Central Division,Total Population,urban,non_ws_demos,9808386
+East North Central Division,Total Population,urban,ws_demos,27257775
+East South Central Division,Hispanic / Latinx,not urban,non_ws_demos,235506
+East South Central Division,Hispanic / Latinx,not urban,ws_demos,8802
+East South Central Division,NH-Native American and Alaska Native alone,not urban,non_ws_demos,33795
+East South Central Division,NH-Native American and Alaska Native alone,not urban,ws_demos,355
+East South Central Division,NH-Asian alone,not urban,non_ws_demos,45443
+East South Central Division,NH-Asian alone,not urban,ws_demos,3549
+East South Central Division,NH-Black or African American alone,not urban,non_ws_demos,836396
+East South Central Division,NH-Black or African American alone,not urban,ws_demos,33478
+East South Central Division,NH two or more races,not urban,non_ws_demos,258587
+East South Central Division,NH two or more races,not urban,ws_demos,6159
+East South Central Division,NH-Native Hawaiian and Pacific Islander,not urban,non_ws_demos,2329
+East South Central Division,NH-Native Hawaiian and Pacific Islander,not urban,ws_demos,95
+East South Central Division,NH-Other,not urban,non_ws_demos,17563
+East South Central Division,NH-Other,not urban,ws_demos,459
+East South Central Division,NH-White alone,not urban,non_ws_demos,6244710
+East South Central Division,NH-White alone,not urban,ws_demos,156760
+East South Central Division,Total Population,not urban,non_ws_demos,7674329
+East South Central Division,Total Population,not urban,ws_demos,209657
+East South Central Division,Hispanic / Latinx,urban,non_ws_demos,425325
+East South Central Division,Hispanic / Latinx,urban,ws_demos,387503
+East South Central Division,NH-Native American and Alaska Native alone,urban,non_ws_demos,15174
+East South Central Division,NH-Native American and Alaska Native alone,urban,ws_demos,11461
+East South Central Division,NH-Asian alone,urban,non_ws_demos,143478
+East South Central Division,NH-Asian alone,urban,ws_demos,124493
+East South Central Division,NH-Black or African American alone,urban,non_ws_demos,1397377
+East South Central Division,NH-Black or African American alone,urban,ws_demos,1545950
+East South Central Division,NH two or more races,urban,non_ws_demos,247116
+East South Central Division,NH two or more races,urban,ws_demos,202385
+East South Central Division,NH-Native Hawaiian and Pacific Islander,urban,non_ws_demos,4602
+East South Central Division,NH-Native Hawaiian and Pacific Islander,urban,ws_demos,3700
+East South Central Division,NH-Other,urban,non_ws_demos,22623
+East South Central Division,NH-Other,urban,ws_demos,19713
+East South Central Division,NH-White alone,urban,non_ws_demos,3854959
+East South Central Division,NH-White alone,urban,ws_demos,3136836
+East South Central Division,Total Population,urban,non_ws_demos,6110654
+East South Central Division,Total Population,urban,ws_demos,5432041
+Middle Atlantic Division,Hispanic / Latinx,not urban,non_ws_demos,194804
+Middle Atlantic Division,Hispanic / Latinx,not urban,ws_demos,23265
+Middle Atlantic Division,NH-Native American and Alaska Native alone,not urban,non_ws_demos,17363
+Middle Atlantic Division,NH-Native American and Alaska Native alone,not urban,ws_demos,604
+Middle Atlantic Division,NH-Asian alone,not urban,non_ws_demos,54774
+Middle Atlantic Division,NH-Asian alone,not urban,ws_demos,11928
+Middle Atlantic Division,NH-Black or African American alone,not urban,non_ws_demos,83855
+Middle Atlantic Division,NH-Black or African American alone,not urban,ws_demos,11503
+Middle Atlantic Division,NH two or more races,not urban,non_ws_demos,182407
+Middle Atlantic Division,NH two or more races,not urban,ws_demos,12963
+Middle Atlantic Division,NH-Native Hawaiian and Pacific Islander,not urban,non_ws_demos,1008
+Middle Atlantic Division,NH-Native Hawaiian and Pacific Islander,not urban,ws_demos,81
+Middle Atlantic Division,NH-Other,not urban,non_ws_demos,16411
+Middle Atlantic Division,NH-Other,not urban,ws_demos,1480
+Middle Atlantic Division,NH-White alone,not urban,non_ws_demos,4604067
+Middle Atlantic Division,NH-White alone,not urban,ws_demos,409294
+Middle Atlantic Division,Total Population,not urban,non_ws_demos,5154689
+Middle Atlantic Division,Total Population,not urban,ws_demos,471118
+Middle Atlantic Division,Hispanic / Latinx,urban,non_ws_demos,978696
+Middle Atlantic Division,Hispanic / Latinx,urban,ws_demos,5806275
+Middle Atlantic Division,NH-Native American and Alaska Native alone,urban,non_ws_demos,13015
+Middle Atlantic Division,NH-Native American and Alaska Native alone,urban,ws_demos,50197
+Middle Atlantic Division,NH-Asian alone,urban,non_ws_demos,620440
+Middle Atlantic Division,NH-Asian alone,urban,ws_demos,2681797
+Middle Atlantic Division,NH-Black or African American alone,urban,non_ws_demos,723460
+Middle Atlantic Division,NH-Black or African American alone,urban,ws_demos,4465120
+Middle Atlantic Division,NH two or more races,urban,non_ws_demos,299102
+Middle Atlantic Division,NH two or more races,urban,ws_demos,968315
+Middle Atlantic Division,NH-Native Hawaiian and Pacific Islander,urban,non_ws_demos,2166
+Middle Atlantic Division,NH-Native Hawaiian and Pacific Islander,urban,ws_demos,7948
+Middle Atlantic Division,NH-Other,urban,non_ws_demos,54203
+Middle Atlantic Division,NH-Other,urban,ws_demos,250010
+Middle Atlantic Division,NH-White alone,urban,non_ws_demos,5801578
+Middle Atlantic Division,NH-White alone,urban,ws_demos,14193386
+Middle Atlantic Division,Total Population,urban,non_ws_demos,8492660
+Middle Atlantic Division,Total Population,urban,ws_demos,28423048
+Mountain Division,Hispanic / Latinx,not urban,non_ws_demos,582238
+Mountain Division,Hispanic / Latinx,not urban,ws_demos,56216
+Mountain Division,NH-Native American and Alaska Native alone,not urban,non_ws_demos,295159
+Mountain Division,NH-Native American and Alaska Native alone,not urban,ws_demos,8557
+Mountain Division,NH-Asian alone,not urban,non_ws_demos,43884
+Mountain Division,NH-Asian alone,not urban,ws_demos,9553
+Mountain Division,NH-Black or African American alone,not urban,non_ws_demos,38547
+Mountain Division,NH-Black or African American alone,not urban,ws_demos,4958
+Mountain Division,NH two or more races,not urban,non_ws_demos,145429
+Mountain Division,NH two or more races,not urban,ws_demos,13065
+Mountain Division,NH-Native Hawaiian and Pacific Islander,not urban,non_ws_demos,4756
+Mountain Division,NH-Native Hawaiian and Pacific Islander,not urban,ws_demos,596
+Mountain Division,NH-Other,not urban,non_ws_demos,16999
+Mountain Division,NH-Other,not urban,ws_demos,1262
+Mountain Division,NH-White alone,not urban,non_ws_demos,2682324
+Mountain Division,NH-White alone,not urban,ws_demos,292269
+Mountain Division,Total Population,not urban,non_ws_demos,3809336
+Mountain Division,Total Population,not urban,ws_demos,386476
+Mountain Division,Hispanic / Latinx,urban,non_ws_demos,1450388
+Mountain Division,Hispanic / Latinx,urban,ws_demos,4112266
+Mountain Division,NH-Native American and Alaska Native alone,urban,non_ws_demos,109074
+Mountain Division,NH-Native American and Alaska Native alone,urban,ws_demos,221222
+Mountain Division,NH-Asian alone,urban,non_ws_demos,232671
+Mountain Division,NH-Asian alone,urban,ws_demos,577872
+Mountain Division,NH-Black or African American alone,urban,non_ws_demos,235199
+Mountain Division,NH-Black or African American alone,urban,ws_demos,653180
+Mountain Division,NH two or more races,urban,non_ws_demos,246272
+Mountain Division,NH two or more races,urban,ws_demos,627100
+Mountain Division,NH-Native Hawaiian and Pacific Islander,urban,non_ws_demos,22540
+Mountain Division,NH-Native Hawaiian and Pacific Islander,urban,ws_demos,60497
+Mountain Division,NH-Other,urban,non_ws_demos,27451
+Mountain Division,NH-Other,urban,ws_demos,70686
+Mountain Division,NH-White alone,urban,non_ws_demos,3238401
+Mountain Division,NH-White alone,urban,ws_demos,8869515
+Mountain Division,Total Population,urban,non_ws_demos,5561996
+Mountain Division,Total Population,urban,ws_demos,15192338
+New England Division,Hispanic / Latinx,not urban,non_ws_demos,65522
+New England Division,Hispanic / Latinx,not urban,ws_demos,12423
+New England Division,NH-Native American and Alaska Native alone,not urban,non_ws_demos,8707
+New England Division,NH-Native American and Alaska Native alone,not urban,ws_demos,562
+New England Division,NH-Asian alone,not urban,non_ws_demos,29047
+New England Division,NH-Asian alone,not urban,ws_demos,11674
+New England Division,NH-Black or African American alone,not urban,non_ws_demos,19293
+New England Division,NH-Black or African American alone,not urban,ws_demos,4727
+New England Division,NH two or more races,not urban,non_ws_demos,101973
+New England Division,NH two or more races,not urban,ws_demos,12569
+New England Division,NH-Native Hawaiian and Pacific Islander,not urban,non_ws_demos,641
+New England Division,NH-Native Hawaiian and Pacific Islander,not urban,ws_demos,70
+New England Division,NH-Other,not urban,non_ws_demos,10589
+New England Division,NH-Other,not urban,ws_demos,1617
+New England Division,NH-White alone,not urban,non_ws_demos,2297539
+New England Division,NH-White alone,not urban,ws_demos,357168
+New England Division,Total Population,not urban,non_ws_demos,2533311
+New England Division,Total Population,not urban,ws_demos,400810
+New England Division,Hispanic / Latinx,urban,non_ws_demos,212456
+New England Division,Hispanic / Latinx,urban,ws_demos,1505689
+New England Division,NH-Native American and Alaska Native alone,urban,non_ws_demos,4976
+New England Division,NH-Native American and Alaska Native alone,urban,ws_demos,16653
+New England Division,NH-Asian alone,urban,non_ws_demos,113906
+New England Division,NH-Asian alone,urban,ws_demos,626224
+New England Division,NH-Black or African American alone,urban,non_ws_demos,115241
+New England Division,NH-Black or African American alone,urban,ws_demos,787653
+New England Division,NH two or more races,urban,non_ws_demos,113432
+New England Division,NH two or more races,urban,ws_demos,428817
+New England Division,NH-Native Hawaiian and Pacific Islander,urban,non_ws_demos,680
+New England Division,NH-Native Hawaiian and Pacific Islander,urban,ws_demos,2477
+New England Division,NH-Other,urban,non_ws_demos,21498
+New England Division,NH-Other,urban,ws_demos,109969
+New England Division,NH-White alone,urban,non_ws_demos,1944578
+New England Division,NH-White alone,urban,ws_demos,6211962
+New England Division,Total Population,urban,non_ws_demos,2526767
+New England Division,Total Population,urban,ws_demos,9689444
+Pacific Division,Hispanic / Latinx,not urban,non_ws_demos,777804
+Pacific Division,Hispanic / Latinx,not urban,ws_demos,101166
+Pacific Division,NH-Native American and Alaska Native alone,not urban,non_ws_demos,142714
+Pacific Division,NH-Native American and Alaska Native alone,not urban,ws_demos,5801
+Pacific Division,NH-Asian alone,not urban,non_ws_demos,168813
+Pacific Division,NH-Asian alone,not urban,ws_demos,56264
+Pacific Division,NH-Black or African American alone,not urban,non_ws_demos,59760
+Pacific Division,NH-Black or African American alone,not urban,ws_demos,12150
+Pacific Division,NH two or more races,not urban,non_ws_demos,248757
+Pacific Division,NH two or more races,not urban,ws_demos,32398
+Pacific Division,NH-Native Hawaiian and Pacific Islander,not urban,non_ws_demos,23418
+Pacific Division,NH-Native Hawaiian and Pacific Islander,not urban,ws_demos,5355
+Pacific Division,NH-Other,not urban,non_ws_demos,25336
+Pacific Division,NH-Other,not urban,ws_demos,2662
+Pacific Division,NH-White alone,not urban,non_ws_demos,2805163
+Pacific Division,NH-White alone,not urban,ws_demos,329941
+Pacific Division,Total Population,not urban,non_ws_demos,4251765
+Pacific Division,Total Population,not urban,ws_demos,545737
+Pacific Division,Hispanic / Latinx,urban,non_ws_demos,3224989
+Pacific Division,Hispanic / Latinx,urban,ws_demos,13321139
+Pacific Division,NH-Native American and Alaska Native alone,urban,non_ws_demos,59249
+Pacific Division,NH-Native American and Alaska Native alone,urban,ws_demos,192773
+Pacific Division,NH-Asian alone,urban,non_ws_demos,960505
+Pacific Division,NH-Asian alone,urban,ws_demos,6285737
+Pacific Division,NH-Black or African American alone,urban,non_ws_demos,449924
+Pacific Division,NH-Black or African American alone,urban,ws_demos,2015764
+Pacific Division,NH two or more races,urban,non_ws_demos,455028
+Pacific Division,NH two or more races,urban,ws_demos,2025772
+Pacific Division,NH-Native Hawaiian and Pacific Islander,urban,non_ws_demos,55147
+Pacific Division,NH-Native Hawaiian and Pacific Islander,urban,ws_demos,296497
+Pacific Division,NH-Other,urban,non_ws_demos,52273
+Pacific Division,NH-Other,urban,ws_demos,219836
+Pacific Division,NH-White alone,urban,non_ws_demos,3681205
+Pacific Division,NH-White alone,urban,ws_demos,15601718
+Pacific Division,Total Population,urban,non_ws_demos,8938320
+Pacific Division,Total Population,urban,ws_demos,39959236
+South Atlantic Division,Hispanic / Latinx,not urban,non_ws_demos,937353
+South Atlantic Division,Hispanic / Latinx,not urban,ws_demos,62860
+South Atlantic Division,NH-Native American and Alaska Native alone,not urban,non_ws_demos,95489
+South Atlantic Division,NH-Native American and Alaska Native alone,not urban,ws_demos,2099
+South Atlantic Division,NH-Asian alone,not urban,non_ws_demos,183602
+South Atlantic Division,NH-Asian alone,not urban,ws_demos,22740
+South Atlantic Division,NH-Black or African American alone,not urban,non_ws_demos,1740116
+South Atlantic Division,NH-Black or African American alone,not urban,ws_demos,107471
+South Atlantic Division,NH two or more races,not urban,non_ws_demos,505954
+South Atlantic Division,NH two or more races,not urban,ws_demos,24115
+South Atlantic Division,NH-Native Hawaiian and Pacific Islander,not urban,non_ws_demos,5287
+South Atlantic Division,NH-Native Hawaiian and Pacific Islander,not urban,ws_demos,231
+South Atlantic Division,NH-Other,not urban,non_ws_demos,47081
+South Atlantic Division,NH-Other,not urban,ws_demos,2558
+South Atlantic Division,NH-White alone,not urban,non_ws_demos,10130909
+South Atlantic Division,NH-White alone,not urban,ws_demos,529568
+South Atlantic Division,Total Population,not urban,non_ws_demos,13645791
+South Atlantic Division,Total Population,not urban,ws_demos,751642
+South Atlantic Division,Hispanic / Latinx,urban,non_ws_demos,3705307
+South Atlantic Division,Hispanic / Latinx,urban,ws_demos,5486726
+South Atlantic Division,NH-Native American and Alaska Native alone,urban,non_ws_demos,63927
+South Atlantic Division,NH-Native American and Alaska Native alone,urban,ws_demos,56938
+South Atlantic Division,NH-Asian alone,urban,non_ws_demos,1018510
+South Atlantic Division,NH-Asian alone,urban,ws_demos,1454116
+South Atlantic Division,NH-Black or African American alone,urban,non_ws_demos,4772675
+South Atlantic Division,NH-Black or African American alone,urban,ws_demos,7127561
+South Atlantic Division,NH two or more races,urban,non_ws_demos,992383
+South Atlantic Division,NH two or more races,urban,ws_demos,1085705
+South Atlantic Division,NH-Native Hawaiian and Pacific Islander,urban,non_ws_demos,17779
+South Atlantic Division,NH-Native Hawaiian and Pacific Islander,urban,ws_demos,14312
+South Atlantic Division,NH-Other,urban,non_ws_demos,139772
+South Atlantic Division,NH-Other,urban,ws_demos,165260
+South Atlantic Division,NH-White alone,urban,non_ws_demos,12576725
+South Atlantic Division,NH-White alone,urban,ws_demos,13309616
+South Atlantic Division,Total Population,urban,non_ws_demos,23287078
+South Atlantic Division,Total Population,urban,ws_demos,28700234
+West North Central Division,Hispanic / Latinx,not urban,non_ws_demos,207649
+West North Central Division,Hispanic / Latinx,not urban,ws_demos,17324
+West North Central Division,NH-Native American and Alaska Native alone,not urban,non_ws_demos,124152
+West North Central Division,NH-Native American and Alaska Native alone,not urban,ws_demos,2354
+West North Central Division,NH-Asian alone,not urban,non_ws_demos,40052
+West North Central Division,NH-Asian alone,not urban,ws_demos,8209
+West North Central Division,NH-Black or African American alone,not urban,non_ws_demos,49198
+West North Central Division,NH-Black or African American alone,not urban,ws_demos,9887
+West North Central Division,NH two or more races,not urban,non_ws_demos,221061
+West North Central Division,NH two or more races,not urban,ws_demos,12497
+West North Central Division,NH-Native Hawaiian and Pacific Islander,not urban,non_ws_demos,4119
+West North Central Division,NH-Native Hawaiian and Pacific Islander,not urban,ws_demos,243
+West North Central Division,NH-Other,not urban,non_ws_demos,14867
+West North Central Division,NH-Other,not urban,ws_demos,821
+West North Central Division,NH-White alone,not urban,non_ws_demos,5485040
+West North Central Division,NH-White alone,not urban,ws_demos,329544
+West North Central Division,Total Population,not urban,non_ws_demos,6146138
+West North Central Division,Total Population,not urban,ws_demos,380879
+West North Central Division,Hispanic / Latinx,urban,non_ws_demos,215194
+West North Central Division,Hispanic / Latinx,urban,ws_demos,1116569
+West North Central Division,NH-Native American and Alaska Native alone,urban,non_ws_demos,19852
+West North Central Division,NH-Native American and Alaska Native alone,urban,ws_demos,92302
+West North Central Division,NH-Asian alone,urban,non_ws_demos,86741
+West North Central Division,NH-Asian alone,urban,ws_demos,537642
+West North Central Division,NH-Black or African American alone,urban,non_ws_demos,215989
+West North Central Division,NH-Black or African American alone,urban,ws_demos,1245734
+West North Central Division,NH two or more races,urban,non_ws_demos,141754
+West North Central Division,NH two or more races,urban,ws_demos,565381
+West North Central Division,NH-Native Hawaiian and Pacific Islander,urban,non_ws_demos,5181
+West North Central Division,NH-Native Hawaiian and Pacific Islander,urban,ws_demos,13786
+West North Central Division,NH-Other,urban,non_ws_demos,10276
+West North Central Division,NH-Other,urban,ws_demos,46331
+West North Central Division,NH-White alone,urban,non_ws_demos,2072202
+West North Central Division,NH-White alone,urban,ws_demos,8760811
+West North Central Division,Total Population,urban,non_ws_demos,2767189
+West North Central Division,Total Population,urban,ws_demos,12378556
+West South Central Division,Hispanic / Latinx,not urban,non_ws_demos,1549555
+West South Central Division,Hispanic / Latinx,not urban,ws_demos,114780
+West South Central Division,NH-Native American and Alaska Native alone,not urban,non_ws_demos,193524
+West South Central Division,NH-Native American and Alaska Native alone,not urban,ws_demos,5210
+West South Central Division,NH-Asian alone,not urban,non_ws_demos,140638
+West South Central Division,NH-Asian alone,not urban,ws_demos,17923
+West South Central Division,NH-Black or African American alone,not urban,non_ws_demos,618832
+West South Central Division,NH-Black or African American alone,not urban,ws_demos,52988
+West South Central Division,NH two or more races,not urban,non_ws_demos,406671
+West South Central Division,NH two or more races,not urban,ws_demos,16797
+West South Central Division,NH-Native Hawaiian and Pacific Islander,not urban,non_ws_demos,6007
+West South Central Division,NH-Native Hawaiian and Pacific Islander,not urban,ws_demos,388
+West South Central Division,NH-Other,not urban,non_ws_demos,26708
+West South Central Division,NH-Other,not urban,ws_demos,1533
+West South Central Division,NH-White alone,not urban,non_ws_demos,5928987
+West South Central Division,NH-White alone,not urban,ws_demos,263793
+West South Central Division,Total Population,not urban,non_ws_demos,8870922
+West South Central Division,Total Population,not urban,ws_demos,473412
+West South Central Division,Hispanic / Latinx,urban,non_ws_demos,3809943
+West South Central Division,Hispanic / Latinx,urban,ws_demos,7032546
+West South Central Division,NH-Native American and Alaska Native alone,urban,non_ws_demos,101252
+West South Central Division,NH-Native American and Alaska Native alone,urban,ws_demos,144071
+West South Central Division,NH-Asian alone,urban,non_ws_demos,586600
+West South Central Division,NH-Asian alone,urban,ws_demos,1045028
+West South Central Division,NH-Black or African American alone,urban,non_ws_demos,1858755
+West South Central Division,NH-Black or African American alone,urban,ws_demos,3106227
+West South Central Division,NH two or more races,urban,non_ws_demos,464158
+West South Central Division,NH two or more races,urban,ws_demos,676607
+West South Central Division,NH-Native Hawaiian and Pacific Islander,urban,non_ws_demos,21639
+West South Central Division,NH-Native Hawaiian and Pacific Islander,urban,ws_demos,24082
+West South Central Division,NH-Other,urban,non_ws_demos,48461
+West South Central Division,NH-Other,urban,ws_demos,75651
+West South Central Division,NH-White alone,urban,non_ws_demos,5039755
+West South Central Division,NH-White alone,urban,ws_demos,7435700
+West South Central Division,Total Population,urban,non_ws_demos,11930563
+West South Central Division,Total Population,urban,ws_demos,19539912
+NA,Hispanic / Latinx,not urban,non_ws_demos,3249043
+NA,Hispanic / Latinx,not urban,ws_demos,0
+NA,NH-Native American and Alaska Native alone,not urban,non_ws_demos,312
+NA,NH-Native American and Alaska Native alone,not urban,ws_demos,0
+NA,NH-Asian alone,not urban,non_ws_demos,2746
+NA,NH-Asian alone,not urban,ws_demos,0
+NA,NH-Black or African American alone,not urban,non_ws_demos,4286
+NA,NH-Black or African American alone,not urban,ws_demos,0
+NA,NH two or more races,not urban,non_ws_demos,2340
+NA,NH two or more races,not urban,ws_demos,0
+NA,NH-Native Hawaiian and Pacific Islander,not urban,non_ws_demos,91
+NA,NH-Native Hawaiian and Pacific Islander,not urban,ws_demos,0
+NA,NH-Other,not urban,non_ws_demos,2508
+NA,NH-Other,not urban,ws_demos,0
+NA,NH-White alone,not urban,non_ws_demos,24548
+NA,NH-White alone,not urban,ws_demos,0
+NA,Total Population,not urban,non_ws_demos,3285874
+NA,Total Population,not urban,ws_demos,0
