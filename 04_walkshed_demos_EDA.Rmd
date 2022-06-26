@@ -6,7 +6,15 @@ output: html_document
 editor_options: 
   chunk_output_type: console
 ---
+calc percent of all in walkshed
+calc percent of a race/ethnicity group
+then ratio
 
+
+Numerator is % POC with Access= # POC with access/# POC total
+Denominator is % NH with access= # NH with access/# NH white total
+
+then if > 1 better access for BIPOC, if < 1 then worse
 
 
 ```{r setup, include=FALSE}
@@ -263,6 +271,25 @@ non_ws_demos |> map(~sum(is.na(.))) |> bind_rows() |> t()
 #   write_csv(paste0(getwd(), '/output_tables/combined_demos_wide_', Sys.Date(), '.csv'))
 
 
+(combined_demos_wide |> 
+  # select(name, ws_demos) |> 
+  filter(name != 'tot_pop') |> 
+  handsome_cats(name) |> 
+  mutate(cat = ifelse(name == 'NH-White alone', 'NH-White alone', 'BIPOC')) |> 
+  group_by(cat) |> 
+  summarise(         sum_ws_demos = sum(ws_demos)
+            , sum_usa_total_demos = sum(usa_total_demos)) |> 
+  mutate(frac = sum_ws_demos / sum_usa_total_demos) |> 
+  select(cat, frac) |> 
+  t() |> as_tibble() |> 
+  janitor::row_to_names(row_number = 1) |> 
+  mutate_all(as.numeric) |> 
+  mutate(ratio = BIPOC / `NH-White alone`) -> has_access_national_ratio)
+  
+# has_access_national_ratio |> 
+#   write_csv(paste0(getwd(), '/output_tables/has_access_national_ratio_', Sys.Date(), '.csv'))
+
+
 # make long form for graphing
 (
   combined_demos_long <- combined_demos_wide |> 
@@ -360,6 +387,26 @@ non_ws_demos_sum |>
 #   write_csv(paste0(getwd(), '/output_tables/combined_demos_urban_wide_', Sys.Date(), '.csv'))
 
 
+(
+  combined_demos_urban_wide |> 
+    filter(name != 'tot_pop') |> 
+    handsome_cats(name) |> 
+    mutate(cat = ifelse(name == 'NH-White alone', 'NH-White alone', 'BIPOC')) |> 
+    group_by(cat, urban) |>
+    summarise(         sum_ws_demos = sum(ws_demos)
+              , sum_usa_total_demos = sum(usa_total_demos)) |>
+    mutate(frac = sum_ws_demos / sum_usa_total_demos) |> 
+    select(cat, urban, frac) |> 
+    pivot_wider(id_cols = urban, names_from = cat, values_from = frac) |> 
+    mutate(ratio = BIPOC / `NH-White alone`) -> has_access_urban_ratio
+  )
+
+# # write out
+# has_access_urban_ratio |>
+#   write_csv(paste0(getwd(), '/output_tables/has_access_urban_ratio_', Sys.Date(), '.csv'))
+
+
+
 # make long form for graphing
 (
   combined_demos_urban_long <- combined_demos_urban_wide |> 
@@ -407,7 +454,7 @@ combined_demos_urban_long |>
 ```
 
 
-## D urban only
+### i urban only
 ```{r}
 
 # viz urban only, within vs outside walk by race/ethnicity
@@ -444,7 +491,7 @@ combined_demos_urban_long |>
 ```
 
 
-## E Divisions - urban only
+## D Divisions - urban only
 ```{r}
 
 # get whole-country demographics by urban and division
@@ -491,6 +538,54 @@ combined_demos_urban_long |>
 #   write_csv(paste0(getwd(), '/output_tables/combined_demos_divisions_urban_wide_', Sys.Date(), '.csv'))
 
 
+(
+  combined_demos_divisions_urban_wide |>
+    filter(name != 'tot_pop') |> 
+    filter(!is.na(Division)) |>
+    handsome_cats(name) |> 
+    mutate(cat = ifelse(name == 'NH-White alone', 'NH-White alone', 'BIPOC')) |> 
+    group_by(cat, urban, Division) |>
+    summarise(         sum_ws_demos = sum(ws_demos)
+              , sum_usa_total_demos = sum(usa_total_demos)) |>
+    mutate(frac = sum_ws_demos / sum_usa_total_demos) |> 
+    select(cat, urban, Division, frac) |> 
+    pivot_wider(id_cols = c(urban, Division), names_from = cat, values_from = frac) |> 
+    mutate(ratio = BIPOC / `NH-White alone`) -> has_access_urban_divisions_ratio
+  )
+
+# has_access_urban_divisions_ratio |> 
+#   write_csv(paste0(getwd(), '/output_tables/has_access_urban_divisions_ratio_', Sys.Date(), '.csv'))
+
+
+
+has_access_urban_divisions_ratio |> 
+  ggplot(aes(ratio, Division)) +
+  geom_col() + 
+  theme_bw(18) +
+  labs(  title = 'Park Access by Race/Ethnicity and Division'
+       # , subtitle = 'Urban areas only'
+       , y = ''
+       , x = 'Ratio of BIPOC with park access to NH-White with parck access'
+       , caption = 'NH = Non-Hispanic\nData Sources: Trust for Public Land walkshed;\nU.S. Census Bureau 2020 blocks') +
+  scale_x_continuous(expand = c(0, 0), lim = c(0, 1.45)) +
+  # scale_x_continuous(labels = scales::label_number(suffix = " M", scale = 1e-6)
+  #                    , expand = c(0, 0), limits = c(0, 6e7)
+  #                    ) + # millions
+  scale_fill_viridis_d() +
+  # theme(axis.text.x = element_text(angle = 90, vjust = .5)) +
+  # theme(legend.position = 'bottom') + 
+  geom_vline(xintercept = 1) + 
+  facet_wrap(~urban) + 
+  NULL
+
+# # save it out
+# ggsave(file = paste0(getwd(), '/figures/Divisions_park_access_10min_ratio_by_urban_'
+#                      , Sys.Date(), '.png')
+#        , width = 7*2, height = 4*2)
+
+
+
+
 # make long form for graphing
 (
   combined_demos_divisions_urban_long <- combined_demos_divisions_urban_wide |> 
@@ -532,8 +627,8 @@ combined_demos_divisions_urban_long |>
   NULL
 
 # # save it out
-ggsave(file = paste0(getwd(), '/figures/Divisions_park_access_10min_urban_only_', Sys.Date(), '.png')
-       , width = 7*2, height = 4*2)
+# ggsave(file = paste0(getwd(), '/figures/Divisions_park_access_10min_urban_only_', Sys.Date(), '.png')
+#        , width = 7*2, height = 4*2)
 
 
 ```
@@ -573,7 +668,7 @@ ggsave(file = paste0(getwd(), '/figures/Divisions_park_access_10min_urban_only_'
 
 # combine non-walkshed and whole country in wide format, calc ws demos as difference btw non and whole
 (
-  combined_demos_divisions_urban_wide <- non_ws_demos_regions_urban_summ |>
+  combined_demos_regions_urban_wide <- non_ws_demos_regions_urban_summ |>
     left_join(USA_total_demos_regions_urban_summ, by = c('Region', 'urban', 'name')) |>
     mutate(ws_demos = usa_total_demos - non_ws_demos
            # , ratio = ws_demos / non_ws_demos
@@ -582,26 +677,77 @@ ggsave(file = paste0(getwd(), '/figures/Divisions_park_access_10min_urban_only_'
   )
 
 # # write out
-# combined_demos_divisions_urban_wide |>
+# combined_demos_regions_urban_wide |>
 #   handsome_cats(name) |>
-#   write_csv(paste0(getwd(), '/output_tables/combined_demos_divisions_urban_wide_', Sys.Date(), '.csv'))
+#   write_csv(paste0(getwd(), '/output_tables/combined_demos_regions_urban_wide_', Sys.Date(), '.csv'))
+
+
+
+(
+  combined_demos_regions_urban_wide |>
+    filter(name != 'tot_pop') |> 
+    filter(!is.na(Region)) |>
+    handsome_cats(name) |> 
+    mutate(cat = ifelse(name == 'NH-White alone', 'NH-White alone', 'BIPOC')) |> 
+    group_by(cat, urban, Region) |>
+    summarise(         sum_ws_demos = sum(ws_demos)
+              , sum_usa_total_demos = sum(usa_total_demos)) |>
+    mutate(frac = sum_ws_demos / sum_usa_total_demos) |> 
+    select(cat, urban, Region, frac) |> 
+    pivot_wider(id_cols = c(urban, Region), names_from = cat, values_from = frac) |> 
+    mutate(ratio = BIPOC / `NH-White alone`) -> has_access_urban_regions_ratio
+  )
+
+# # write out
+# has_access_urban_regions_ratio |>
+#   write_csv(paste0(getwd(), '/output_tables/has_access_urban_regions_ratio_', Sys.Date(), '.csv'))
+
+
+
+has_access_urban_regions_ratio |> 
+  ggplot(aes(ratio, Region)) +
+  geom_col() + 
+  theme_bw(18) +
+  labs(  title = 'Park Access by Race/Ethnicity and Region'
+       # , subtitle = 'Urban areas only'
+       , y = ''
+       , x = 'Ratio of BIPOC with park access to NH-White with parck access'
+       , caption = 'NH = Non-Hispanic\nData Sources: Trust for Public Land walkshed;\nU.S. Census Bureau 2020 blocks') +
+  scale_x_continuous(expand = c(0, 0), lim = c(0, 1.75)) +
+  # scale_x_continuous(labels = scales::label_number(suffix = " M", scale = 1e-6)
+  #                    , expand = c(0, 0), limits = c(0, 6e7)
+  #                    ) + # millions
+  scale_fill_viridis_d() +
+  # theme(axis.text.x = element_text(angle = 90, vjust = .5)) +
+  # theme(legend.position = 'bottom') + 
+  geom_vline(xintercept = 1) + 
+  facet_wrap(~urban) + 
+  NULL
+
+# # save it out
+# ggsave(file = paste0(getwd(), '/figures/Regions_park_access_10min_ratio_by_urban_'
+#                      , Sys.Date(), '.png')
+#        , width = 7*2, height = 4*2)
+
+
+
 
 
 # make long form for graphing
 (
-  combined_demos_divisions_urban_long <- combined_demos_divisions_urban_wide |> 
+  combined_demos_regions_urban_long <- combined_demos_regions_urban_wide |> 
     select(name, urban, non_ws_demos, ws_demos) |> 
     pivot_longer(cols = c(non_ws_demos, ws_demos), names_to = 'source')
   )
 
 # # write out
-# combined_demos_divisions_urban_long |> 
+# combined_demos_regions_urban_long |> 
 #   handsome_cats(name) |>
-#   write_csv(paste0(getwd(), '/output_tables/combined_demos_divisions_urban_long_', Sys.Date(), '.csv'))
+#   write_csv(paste0(getwd(), '/output_tables/combined_demos_regions_urban_long_', Sys.Date(), '.csv'))
 
 
 # viz urban vs not, within vs outside walk by race/ethnicity
-combined_demos_divisions_urban_long |> 
+combined_demos_regions_urban_long |> 
   mutate(' ' = fct_recode(factor(source)
                           , `Oustside 10-minute walk` = 'non_ws_demos'
                           , `Within 10-minute walk` = 'ws_demos'
