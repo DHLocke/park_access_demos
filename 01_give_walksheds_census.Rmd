@@ -1080,6 +1080,8 @@ ws |>
   filter(sesync_id %in% walksheds_no_demos) |> 
   mapview()
 
+# # save it out!
+# ws_demos |> write_csv(paste0('output_tables/ws_demos_tbl_', Sys.Date(), '.csv'))
 
 ```
 
